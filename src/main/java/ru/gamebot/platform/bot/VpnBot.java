@@ -437,26 +437,20 @@ public class VpnBot extends TelegramLongPollingBot {
         sb.append("\n\n").append(excCard(coins));
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         boolean linkFailed = false;
+        boolean excReady = coins >= Vpn2Service.EXC_DISCOUNT;
         for (Tariff t : Tariff.values()) {
+            String label = "💳 " + t.getTitle() + ": " + t.getStars() + " ⭐";
+            if (excReady && t.hasExcDiscount()) {
+                // есть EXC на скидку: сначала спрашиваем, нужна ли она (недельный тариф без скидки, он сразу к оплате)
+                rows.add(List.of(keyboardFactory.callback(label, "m:st:" + t.getKey())));
+                continue;
+            }
             String link = invoiceLink(t, false);
             if (link == null) {
                 linkFailed = true;
                 continue;
             }
-            rows.add(List.of(keyboardFactory.url("💳 " + t.getTitle() + ": " + t.getStars() + " ⭐", link)));
-        }
-        if (coins >= Vpn2Service.EXC_DISCOUNT) {
-            for (Tariff t : Tariff.values()) {
-                if (!t.hasExcDiscount()) {
-                    continue; // недельный тариф без скидки за EXC: −50 ₽ обнулила бы цену
-                }
-                String link = invoiceLink(t, true);
-                if (link != null) {
-                    rows.add(List.of(keyboardFactory.url("🪙 " + t.getTitle() + ": " + t.getExcStars() + " ⭐ + " + formatExc(Vpn2Service.EXC_DISCOUNT) + " EXC", link)));
-                }
-            }
-        } else {
-            rows.add(List.of(keyboardFactory.url("🎮 Заработать EXC в EGC", egcUrl())));
+            rows.add(List.of(keyboardFactory.url(label, link)));
         }
         if (linkFailed) {
             log.warn("VPN bot: failed to create Stars invoice link for tariffs screen, user {}", uid);
@@ -470,11 +464,66 @@ public class VpnBot extends TelegramLongPollingBot {
         show(uid, oldMsgId, sb.toString(), rows);
     }
 
+    /** Выбранный тариф от месяца, когда у игрока хватает EXC: спрашиваем, нужна ли скидка 50 ₽ за EXC. Нет - сразу окно оплаты звёздами, да - экран подтверждения. */
+    private void showDiscountChoice(Long uid, Integer oldMsgId, String key) {
+        Optional<Tariff> found = Tariff.byKey(key);
+        if (found.isEmpty()) {
+            showTariffs(uid, oldMsgId);
+            return;
+        }
+        Tariff t = found.get();
+        long coins = excBalance(uid);
+        String plain = invoiceLink(t, false);
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        StringBuilder sb = new StringBuilder("💳 <b>").append(t.getTitle()).append("</b>\n\nЦена: <b>").append(t.getStars()).append(" ⭐</b>");
+        if (t.hasExcDiscount() && coins >= Vpn2Service.EXC_DISCOUNT) {
+            sb.append("\n\n🪙 У вас ").append(formatExc(coins)).append(" EXC. Можно заплатить на 50 ₽ меньше: <b>")
+              .append(t.getExcStars()).append(" ⭐</b>, и спишем ").append(formatExc(Vpn2Service.EXC_DISCOUNT)).append(" EXC.\n\n<b>Применить скидку?</b>");
+            rows.add(List.of(keyboardFactory.callback("🪙 Да, со скидкой: " + t.getExcStars() + " ⭐", "m:sd:" + t.getKey())));
+            if (plain != null) {
+                rows.add(List.of(keyboardFactory.url("⭐ Нет, без скидки: " + t.getStars() + " ⭐", plain)));
+            }
+        } else if (plain != null) {
+            rows.add(List.of(keyboardFactory.url("⭐ Оплатить " + t.getStars() + " ⭐", plain)));
+        }
+        if (plain == null) {
+            sb.append("\n\n⚠️ Оплата временно недоступна, попробуйте через минуту.");
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Тарифы", "m:tariffs")));
+        show(uid, oldMsgId, sb.toString(), rows);
+    }
+
+    /** Подтверждение скидки за EXC: что будет с ценой и балансом, затем окно оплаты. EXC спишутся только после оплаты. */
+    private void showDiscountConfirm(Long uid, Integer oldMsgId, String key) {
+        Optional<Tariff> found = Tariff.byKey(key);
+        long coins = excBalance(uid);
+        if (found.isEmpty() || !found.get().hasExcDiscount() || coins < Vpn2Service.EXC_DISCOUNT) {
+            showTariffs(uid, oldMsgId);
+            return;
+        }
+        Tariff t = found.get();
+        String link = invoiceLink(t, true);
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        StringBuilder sb = new StringBuilder("🪙 <b>Скидка за EXC</b>\n\n")
+                .append(t.getTitle()).append("\n")
+                .append("Без скидки: ").append(t.getStars()).append(" ⭐\n")
+                .append("Со скидкой: <b>").append(t.getExcStars()).append(" ⭐</b>\n\n")
+                .append("С баланса спишем ").append(formatExc(Vpn2Service.EXC_DISCOUNT)).append(" EXC (останется ")
+                .append(formatExc(coins - Vpn2Service.EXC_DISCOUNT)).append("). EXC спишутся после оплаты.");
+        if (link != null) {
+            rows.add(List.of(keyboardFactory.url("✅ Подтвердить и оплатить " + t.getExcStars() + " ⭐", link)));
+        } else {
+            sb.append("\n\n⚠️ Оплата временно недоступна, попробуйте через минуту.");
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "m:st:" + t.getKey())));
+        show(uid, oldMsgId, sb.toString(), rows);
+    }
+
     /** Карточка скидки за EXC: прогресс до 18 000 EXC у игрока EGC, «скидка доступна» или объяснение для тех, у кого профиля EGC ещё нет. */
     private static String excCard(long coins) {
         long goal = Vpn2Service.EXC_DISCOUNT;
         if (coins >= goal) {
-            return "🪙 <b>Скидка за EXC</b>\nУ вас " + formatExc(coins) + " EXC. Можно заплатить на 50 ₽ меньше: спишем " + formatExc(goal) + " EXC. Скидка есть на тарифы от месяца (кнопки ниже).";
+            return "🪙 <b>Скидка за EXC</b>\nУ вас " + formatExc(coins) + " EXC. На тарифы от месяца можно заплатить на 50 ₽ меньше: бот предложит скидку, когда вы выберете тариф.";
         }
         if (coins >= 0) {
             long pct = Math.min(100, coins * 100 / goal);
@@ -884,6 +933,10 @@ public class VpnBot extends TelegramLongPollingBot {
     private boolean handlePayCallback(Long uid, User from, Integer oldMsgId, String data) {
         if (data.equals("m:pay")) {
             showPayMethods(uid, oldMsgId);
+        } else if (data.startsWith("m:st:")) {
+            showDiscountChoice(uid, oldMsgId, data.substring("m:st:".length()));
+        } else if (data.startsWith("m:sd:")) {
+            showDiscountConfirm(uid, oldMsgId, data.substring("m:sd:".length()));
         } else if (data.startsWith("m:soon:")) {
             showMethodSoon(uid, oldMsgId, data.substring("m:soon:".length()));
         } else if (data.equals("m:exc")) {
