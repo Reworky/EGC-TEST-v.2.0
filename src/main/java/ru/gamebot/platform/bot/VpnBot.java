@@ -803,7 +803,7 @@ public class VpnBot extends TelegramLongPollingBot {
         String[] parts = text.split("\\s+");
         if (parts.length < 2) {
             sendHtml(adminId, "Формат: <code>/vpn2 ID</code> (статус), <code>/vpn2 ID trial</code>, <code>/vpn2 ID m1</code>, <code>m3</code>, <code>m12</code> (выдать срок), <code>/vpn2 ID off</code>.\n"
-                    + "Перенос всех ключей в текущую панель после смены настроек: <code>/vpn2 sync</code>, затем сообщение игрокам про новую ссылку: <code>/vpn2 notify</code>. Статистика: <code>/stats</code>. Состояние: " + (vpn.isEnabled() ? "включён" : "выключен (VPN2_ENABLED и настройки панели)")
+                    + "Перенос всех ключей в текущую панель после смены настроек: <code>/vpn2 sync</code>, затем сообщение игрокам про новую ссылку: <code>/vpn2 notify</code>. Предупреждение о перебоях всем с работающим ключом: <code>/vpn2 warn</code>. Статистика: <code>/stats</code>. Состояние: " + (vpn.isEnabled() ? "включён" : "выключен (VPN2_ENABLED и настройки панели)")
                     + ", " + (vpn.isOpen() ? "открыт всем" : "закрыт (админы, тестеры и те, у кого уже есть ключ)"), null);
             return;
         }
@@ -831,6 +831,27 @@ public class VpnBot extends TelegramLongPollingBot {
                 }
             }
             sendHtml(adminId, "📨 Сообщение о новой ссылке отправлено: <b>" + sent + "</b> из " + holders.size() + " работающих ключей.", null);
+            return;
+        }
+        if ("warn".equalsIgnoreCase(parts[1])) {
+            // предупреждение о возможных перебоях (переезд серверов): всем с работающим ключом, без ссылок
+            java.util.List<Long> holders = vpn.runningKeyHolderIds();
+            int sent = 0;
+            for (Long holder : holders) {
+                try {
+                    List<List<InlineKeyboardButton>> warnRows = new ArrayList<>();
+                    warnRows.add(List.of(keyboardFactory.callback("👤 Личный кабинет", "m:my")));
+                    sendHtml(holder, "🔧 <b>Возможны перебои в работе EGC VPN</b>\n\nМы переезжаем на новые серверы. В ближайшие часы VPN может работать медленнее или на минуту пропадать.\n\nЕсли не подключается, откройте «Личный кабинет», скопируйте ссылку подписки, обновите её в Happ и нажмите «Подключить».\n\nСрок вашего ключа не меняется. Спасибо, что с нами!", warnRows);
+                    sent++;
+                    Thread.sleep(60);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                } catch (Exception e) {
+                    log.warn("VPN bot: warning about interruptions failed for {}", holder, e);
+                }
+            }
+            sendHtml(adminId, "📨 Предупреждение о перебоях отправлено: <b>" + sent + "</b> из " + holders.size() + " работающих ключей.", null);
             return;
         }
         long targetId;
