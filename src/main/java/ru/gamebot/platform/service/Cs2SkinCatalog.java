@@ -50,6 +50,37 @@ public class Cs2SkinCatalog {
         }
 
         public String imageResource() { return "skins/" + key + ".jpg"; }
+
+        /** Тип оружия для выбора категории в боте (по названию оружия до « | »): pistol, rifle, sniper, smg, shotgun, lmg. */
+        public String typeKey() {
+            String weapon = name.contains(" | ") ? name.substring(0, name.indexOf(" | ")) : name;
+            return switch (weapon) {
+                case "Glock-18", "USP-S", "P2000", "Desert Eagle", "P250", "Five-SeveN", "Tec-9", "CZ75-Auto", "Dual Berettas", "R8 Revolver" -> "pistol";
+                case "AK-47", "M4A4", "M4A1-S", "Galil AR", "FAMAS", "SG 553", "AUG" -> "rifle";
+                case "AWP", "SSG 08", "SCAR-20", "G3SG1" -> "sniper";
+                case "MAC-10", "MP9", "MP7", "MP5-SD", "UMP-45", "P90", "PP-Bizon" -> "smg";
+                case "Nova", "XM1014", "MAG-7", "Sawed-Off" -> "shotgun";
+                case "Negev", "M249" -> "lmg";
+                default -> "other";
+            };
+        }
+    }
+
+    /** Типы оружия в порядке показа и подписи (как в фильтре маркетплейса); показываются только непустые. */
+    public static final java.util.Map<String, String> TYPE_LABELS = new java.util.LinkedHashMap<>();
+    static {
+        TYPE_LABELS.put("pistol", "Пистолеты");
+        TYPE_LABELS.put("rifle", "Винтовки");
+        TYPE_LABELS.put("sniper", "Снайперские винтовки");
+        TYPE_LABELS.put("smg", "Пистолеты-пулемёты");
+        TYPE_LABELS.put("lmg", "Пулемёты");
+        TYPE_LABELS.put("shotgun", "Дробовики");
+    }
+
+    /** Скины типа (ключ из TYPE_LABELS); «all» - все. Порядок каталога (от дешёвых к дорогим) сохраняется. */
+    public List<SkinDef> byType(String typeKey) {
+        if (typeKey == null || "all".equals(typeKey) || !TYPE_LABELS.containsKey(typeKey)) return skins;
+        return skins.stream().filter(sd -> sd.typeKey().equals(typeKey)).toList();
     }
 
     private final List<SkinDef> skins;

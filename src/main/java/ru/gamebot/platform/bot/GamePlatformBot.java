@@ -15084,26 +15084,54 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         answerSilently(callbackQuery.getId());
         Integer messageId = callbackQuery.getMessage() != null ? callbackQuery.getMessage().getMessageId() : null;
         String[] parts = arg.split(":");
+        boolean sourcePhoto = callbackQuery.getMessage() instanceof Message sourceMessage && sourceMessage.hasPhoto();
+        if ("menu".equals(parts[0])) {
+            sendSkinCategories(user, messageId, sourcePhoto);
+            return;
+        }
+        String type = "all";
         int index = 0;
         if ("v".equals(parts[0]) && parts.length == 3) {
+            type = parts[1];
             try {
                 index = Integer.parseInt(parts[2]);
             } catch (NumberFormatException e) {
                 index = 0;
             }
         }
-        boolean sourcePhoto = callbackQuery.getMessage() instanceof Message sourceMessage && sourceMessage.hasPhoto();
-        sendSkinCard(user, index, messageId, sourcePhoto);
+        sendSkinCard(user, type, index, messageId, sourcePhoto);
+    }
+
+    /** Выбор типа оружия в разделе «Скины» (24.11.2026, владелец): как фильтр на маркетплейсе, только непустые типы и «Все скины». */
+    private void sendSkinCategories(AppUser user, Integer sourceMessageId, boolean sourcePhoto) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("🔫 Все скины (" + cs2SkinCatalog.all().size() + ")", "skin:v:all:0")));
+        for (Map.Entry<String, String> e : ru.gamebot.platform.service.Cs2SkinCatalog.TYPE_LABELS.entrySet()) {
+            int count = cs2SkinCatalog.byType(e.getKey()).size();
+            if (count == 0) continue;
+            rows.add(List.of(keyboardFactory.callback(e.getValue() + " (" + count + ")", "skin:v:" + e.getKey() + ":0")));
+        }
+        rows.add(List.of(
+                keyboardFactory.callback("⬅️ Назад", "case:menu"),
+                keyboardFactory.callback("🏠 Меню", "menu:main")));
+        String text = "🔫 <b>Скины CS2</b>\n\nВыберите тип оружия.";
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
+        if (sourcePhoto && editPhotoMessage(user.getTelegramId(), sourceMessageId, "cs2_banner.jpg", text, keyboard)) {
+            return;
+        }
+        deleteMessageQuietly(user.getTelegramId(), sourceMessageId);
+        sendResourceBanner(user.getTelegramId(), "cs2_banner.jpg", text, keyboard);
     }
 
     /** Карусель скинов CS2 (24.11.2026, по образцу sendCaseCard): картинка с сайта маркетплейса, название, износ, цена в EXC, «Обменять». */
-    private void sendSkinCard(AppUser user, int index, Integer sourceMessageId, boolean sourcePhoto) {
-        List<ru.gamebot.platform.service.Cs2SkinCatalog.SkinDef> list = cs2SkinCatalog.all();
+    private void sendSkinCard(AppUser user, String type, int index, Integer sourceMessageId, boolean sourcePhoto) {
+        List<ru.gamebot.platform.service.Cs2SkinCatalog.SkinDef> list = cs2SkinCatalog.byType(type);
         if (list.isEmpty()) {
             deleteMessageQuietly(user.getTelegramId(), sourceMessageId);
-            sendShop(user);
+            sendSkinCategories(user, null, false);
             return;
         }
+        String typeKey = ru.gamebot.platform.service.Cs2SkinCatalog.TYPE_LABELS.containsKey(type) ? type : "all";
         int n = list.size();
         int idx = ((index % n) + n) % n;
         ru.gamebot.platform.service.Cs2SkinCatalog.SkinDef c = list.get(idx);
@@ -15121,15 +15149,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         if (n > 1) {
             rows.add(List.of(
-                    keyboardFactory.callback("◀️", "skin:v:all:" + (idx - 1)),
+                    keyboardFactory.callback("◀️", "skin:v:" + typeKey + ":" + (idx - 1)),
                     keyboardFactory.callback((idx + 1) + " / " + n, "noop"),
-                    keyboardFactory.callback("▶️", "skin:v:all:" + (idx + 1))));
+                    keyboardFactory.callback("▶️", "skin:v:" + typeKey + ":" + (idx + 1))));
         }
         rows.add(List.of(item != null
                 ? keyboardFactory.callback("🛒 Обменять", "shop:buy:" + item.getId())
                 : keyboardFactory.callback("🔒 Обмен скоро откроется", "noop")));
         rows.add(List.of(
-                keyboardFactory.callback("⬅️ Назад", "case:menu"),
+                keyboardFactory.callback("⬅️ Назад", "skin:menu"),
                 keyboardFactory.callback("🏠 Меню", "menu:main")));
 
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
@@ -15192,7 +15220,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("📦 Кейсы (" + cs2CaseCatalog.all().size() + ")", "case:v:all:0")));
         }
         if (!cs2SkinCatalog.all().isEmpty()) {
-            rows.add(List.of(keyboardFactory.callback("🔫 Скины (" + cs2SkinCatalog.all().size() + ")", "skin:v:all:0")));
+            rows.add(List.of(keyboardFactory.callback("🔫 Скины (" + cs2SkinCatalog.all().size() + ")", "skin:menu")));
         }
         rows.add(List.of(
                 keyboardFactory.callback("⬅️ Назад", "menu:shop"),
