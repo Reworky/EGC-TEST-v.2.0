@@ -172,6 +172,9 @@ public class Cs2CaseAutoIssueService {
         }
         if (r.path("success").asBoolean(false)) {
             log.info("[Cs2CaseAutoIssue] bought '{}' for request {} (market item {})", c.hashName(), id, r.path("id").asText());
+            bot.caseAutoNotify(s.telegramId(), "🎁 <b>Кейс уже в пути</b>\n\n📦 " + escape(s.title()) + " · заявка <b>М-" + s.displayId() + "</b>\n\n"
+                    + "<b>Что сделать сейчас:</b>\n1️⃣ Откройте Steam → «Предложения обмена»\n2️⃣ Нажмите «Принять» в течение <b>5 минут</b>\n\n"
+                    + "⚠️ Не успеете: обмен отменится, а EXC вернутся.", null);
             return;
         }
         int code = r.path("code").asInt(0);
@@ -229,7 +232,7 @@ public class Cs2CaseAutoIssueService {
         if (stage == 5 || !cancellation.isEmpty()) {
             // обмен отменён или истёк: если виноват продавец - игрок не при чём (без блока кейсов), иначе игрок не принял вовремя
             boolean sellerFault = "seller".equalsIgnoreCase(causer);
-            fail(s, sellerFault ? "Продавец отменил обмен, кейс не передан." : "Обмен в Steam не был принят вовремя (на это даётся около 5 минут), кейс не передан. Кейсы будут недоступны 30 дней.",
+            fail(s, sellerFault ? "Продавец отменил обмен, кейс не передан." : "Обмен в Steam не был принят в течение 5 минут.",
                     "маркетплейс: обмен по заявке М-" + s.displayId() + " отменён (stage " + stage + ", causer '" + causer + "', причина '" + cancellation + "')", !sellerFault);
         } else if (stage == 2 || (receiveUntil > 0 && nowSec > receiveUntil + RECEIVE_BUFFER_SEC && data.path("settlement").asLong(0) > 0)) {
             // stage 2 маркетплейс ставит не сразу (по факту 24.11.2026 у успешного обмена stage остаётся 1 до конца 7-дневного периода): считаем кейс полученным,
@@ -275,11 +278,11 @@ public class Cs2CaseAutoIssueService {
             return;
         }
         missedInRow.set(0);
-        String player = "✅ <b>Кейс отправлен</b>\n\n" + escape(s.title()) + " · заявка <b>М-" + s.displayId() + "</b>.\n"
-                + "Откройте Steam → «Предложения обмена» и примите обмен сразу, как он придёт: на это даётся около 5 минут, потом он отменяется и EXC возвращаются. Если не пришло, напишите в поддержку.";
+        String player = "✅ <b>Кейс у вас!</b>\n\n📦 " + escape(s.title()) + " · заявка <b>М-" + s.displayId() + "</b>\n"
+                + "🪙 Списано: <b>" + fmtExc(s.paidExc()) + " EXC</b>\n\nПриятного открытия 🎉\nЧто-то не так? Напишите в поддержку.";
         String admin = "✅ <b>Закрыта выплата (автовыдача кейса)</b>\n\nЗаявка М-" + s.displayId() + " · " + escape(s.title()) + "\n"
                 + "👤 " + escape(s.nick()) + " (" + s.telegramId() + ")\n"
-                + "🪙 Списано: " + s.paidExc() + " EXC" + (paidRub > 0 ? " · закупка на маркетплейсе: " + paidRub + " ₽" : "");
+                + "🪙 Списано: " + fmtExc(s.paidExc()) + " EXC" + (paidRub > 0 ? " · закупка на маркетплейсе: " + paidRub + " ₽" : "");
         bot.caseAutoNotify(s.telegramId(), player, admin);
     }
 
@@ -299,8 +302,9 @@ public class Cs2CaseAutoIssueService {
             alertAdmins("⚠️ Автовыдача кейса: не удалось отклонить и вернуть EXC по заявке М-" + s.displayId() + " (" + escape(e.getMessage()) + "). Проверьте вручную.");
             return;
         }
-        bot.caseAutoNotify(s.telegramId(), "❌ <b>Кейс не выдан</b>\n\n" + escape(s.title()) + " · заявка <b>М-" + s.displayId() + "</b>.\n"
-                + escape(playerText) + "\n🪙 " + s.paidExc() + " EXC вернулись на баланс.", null);
+        bot.caseAutoNotify(s.telegramId(), "❌ <b>Кейс не выдан</b>\n\n📦 " + escape(s.title()) + " · заявка <b>М-" + s.displayId() + "</b>\n"
+                + escape(playerText) + "\n\n🪙 <b>" + fmtExc(s.paidExc()) + " EXC</b> вернулись на баланс."
+                + (notAccepted ? "\n⏳ Кейсы будут недоступны 30 дней." : ""), null);
         if (adminDetail != null) {
             alertAdmins("⚠️ Автовыдача кейса: заявка М-" + s.displayId() + " отклонена, EXC возвращены. Причина: " + escape(adminDetail));
         }        if (notAccepted && missedInRow.incrementAndGet() >= PAUSE_AFTER_MISSED && !paused) {
@@ -360,6 +364,10 @@ public class Cs2CaseAutoIssueService {
             log.warn("[Cs2CaseAutoIssue] {} failed: {}", method, e.getClass().getSimpleName());
             return null;
         }
+    }
+
+    private static String fmtExc(long value) {
+        return String.format("%,d", value).replace(',', ' ');
     }
 
     private static String escape(String s) {
