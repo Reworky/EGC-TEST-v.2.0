@@ -51,7 +51,10 @@ public class Cs2CaseAutoIssueService {
     public record Created(Long requestId) {}
 
     private record Snap(Long id, RewardRequestStatus status, String title, String details, Long telegramId, Long displayId,
-                        String nick, long paidExc, LocalDateTime createdAt, boolean isCase) {}
+                        String nick, long paidExc, LocalDateTime createdAt, String group) {}
+
+    /** Что покупаем на маркетплейсе: market_hash_name, закупка из каталога и множитель потолка цены (кейсы 1,35, скины 1,20: скин дороже и скачет сильнее). */
+    private record Def(String hashName, double costRub, double markup) {}
 
     /** Метка в комментарии отклонённой заявки: обмен не принят игроком вовремя (ShopLimitService закрывает такому игроку кейсы на 30 дней). */
     public static final String NOT_ACCEPTED_MARKER = "[кейс не принят]";
@@ -65,11 +68,13 @@ public class Cs2CaseAutoIssueService {
     private static final Pattern TOKEN = Pattern.compile("[?&]token=([A-Za-z0-9_-]{4,32})");
     /** Потолок цены закупки: закупка из каталога x 1,35 + 2 ₽. Покупается самый дешёвый лот, потолок только отсекает скачок цены. */
     private static final double MAX_MARKUP = 1.35;
+    private static final double MAX_MARKUP_SKIN = 1.20;
     private static final int MAX_POLL_PER_CYCLE = 20;
     /** Запас после срока приёма обмена (receive_until), чтобы маркетплейс успел пометить непринятый обмен отменённым. */
     private static final long RECEIVE_BUFFER_SEC = 120;
 
     private final Cs2CaseCatalog catalog;
+    private final Cs2SkinCatalog skinCatalog;
     private final RewardService rewardService;
     private final RewardRequestRepository requestRepository;
     private final TransactionTemplate tx;
@@ -82,10 +87,11 @@ public class Cs2CaseAutoIssueService {
     /** Заявки, по которым алерт уже отправлен (чтобы опрос не спамил каждые 30 секунд); сбрасывается при перезапуске. */
     private final Set<Long> alerted = ConcurrentHashMap.newKeySet();
 
-    public Cs2CaseAutoIssueService(Cs2CaseCatalog catalog, RewardService rewardService, RewardRequestRepository requestRepository,
+    public Cs2CaseAutoIssueService(Cs2CaseCatalog catalog, Cs2SkinCatalog skinCatalog, RewardService rewardService, RewardRequestRepository requestRepository,
                                    PlatformTransactionManager txManager, @Lazy GamePlatformBot bot, ObjectMapper mapper,
                                    @Value("${app.market-csgo-api-key:}") String apiKey) {
         this.catalog = catalog;
+        this.skinCatalog = skinCatalog;
         this.rewardService = rewardService;
         this.requestRepository = requestRepository;
         this.tx = new TransactionTemplate(txManager);
@@ -137,10 +143,10 @@ public class Cs2CaseAutoIssueService {
 
     private void start(Long id) {
         Snap s = snapshot(id);
-        if (s == null || s.status() != RewardRequestStatus.PENDING || !s.isCase()) return;
-        Cs2CaseCatalog.CaseDef c = catalog.all().stream().filter(x -> x.title().equals(s.title())).findFirst().orElse(null);
+        if (s == null || s.status() != RewardRequestStatus.PENDING || !isCs2Group(s.group())) return;
+        Def c = findDef(s.title());
         if (c == null || c.hashName().isBlank()) {
-            fail(s, "Кейс временно нельзя выдать автоматически.", "кейса нет в каталоге или не задан hashName: " + s.title());
+            fail(s, "Эту позицию временно нельзя выдать автоматически.", "позиции нет в каталогах кейсов и скинов или не задан hashName: " + s.title());
             return;
         }
         String[] link = parseTradeUrl(s.details());
@@ -158,7 +164,7 @@ public class Cs2CaseAutoIssueService {
         if (existing != null && existing.path("success").asBoolean(false)) {
             return; // покупка уже есть (повтор после сбоя) - дальше статус заберёт опрос
         }
-        long priceKop = Math.round((c.costRub() * MAX_MARKUP + 2) * 100);
+        long priceKop = Math.round((c.costRub() * c.markup() + 2) * 100);
         Map<String, String> params = new LinkedHashMap<>();
         params.put("hash_name", c.hashName());
         params.put("price", String.valueOf(priceKop));
@@ -172,7 +178,7 @@ public class Cs2CaseAutoIssueService {
         }
         if (r.path("success").asBoolean(false)) {
             log.info("[Cs2CaseAutoIssue] bought '{}' for request {} (market item {})", c.hashName(), id, r.path("id").asText());
-            bot.caseAutoNotify(s.telegramId(), "🎁 <b>Кейс уже в пути</b>\n\n📦 " + escape(s.title()) + " · заявка <b>М-" + s.displayId() + "</b>\n\n"
+            bot.caseAutoNotify(s.telegramId(), "🎁 <b>" + noun(s) + " уже в пути</b>\n\n📦 " + escape(s.title()) + " · заявка <b>М-" + s.displayId() + "</b>\n\n"
                     + "<b>Что сделать сейчас:</b>\n1️⃣ Откройте Steam → «Предложения обмена»\n2️⃣ Нажмите «Принять» в течение <b>5 минут</b>\n\n"
                     + "⚠️ Не успеете: обмен отменится, а EXC вернутся.", null);
             return;
@@ -195,7 +201,7 @@ public class Cs2CaseAutoIssueService {
     public void poll() {
         if (!isActive()) return;
         List<Long> ids = tx.execute(st -> requestRepository.findAllByStatusOrderByCreatedAtAsc(RewardRequestStatus.IN_PROGRESS).stream()
-                .filter(r -> Cs2CaseCatalog.GROUP.equals(r.getRewardItem().getPurchaseGroup()))
+                .filter(r -> isCs2Group(r.getRewardItem().getPurchaseGroup()))
                 .map(RewardRequest::getId).limit(MAX_POLL_PER_CYCLE).toList());
         if (ids == null) return;
         for (Long id : ids) {
@@ -250,7 +256,9 @@ public class Cs2CaseAutoIssueService {
     @Scheduled(fixedDelay = 30 * 60 * 1000L, initialDelay = 5 * 60 * 1000L)
     public void watchReversals() {
         if (!isActive()) return;
-        List<Long> ids = requestRepository.findApprovedIdsSince(Cs2CaseCatalog.GROUP, LocalDateTime.now().minusDays(7));
+        LocalDateTime since7 = LocalDateTime.now().minusDays(7);
+        List<Long> ids = new java.util.ArrayList<>(requestRepository.findApprovedIdsSince(Cs2CaseCatalog.GROUP, since7));
+        ids.addAll(requestRepository.findApprovedIdsSince(Cs2SkinCatalog.GROUP, since7));
         int checked = 0;
         for (Long id : ids) {
             if (checked >= 40 || alerted.contains(-id)) continue;
@@ -281,9 +289,9 @@ public class Cs2CaseAutoIssueService {
             return;
         }
         missedInRow.set(0);
-        String player = "✅ <b>Кейс у вас!</b>\n\n📦 " + escape(s.title()) + " · заявка <b>М-" + s.displayId() + "</b>\n"
+        String player = "✅ <b>" + noun(s) + " у вас!</b>\n\n📦 " + escape(s.title()) + " · заявка <b>М-" + s.displayId() + "</b>\n"
                 + "🪙 Списано: <b>" + fmtExc(s.paidExc()) + " EXC</b>\n\nПриятного открытия 🎉\nЧто-то не так? Напишите в поддержку.";
-        String admin = "✅ <b>Закрыта выплата (автовыдача кейса)</b>\n\nЗаявка М-" + s.displayId() + " · " + escape(s.title()) + "\n"
+        String admin = "✅ <b>Закрыта выплата (автовыдача CS2)</b>\n\nЗаявка М-" + s.displayId() + " · " + escape(s.title()) + "\n"
                 + "👤 " + escape(s.nick()) + " (" + s.telegramId() + ")\n"
                 + "🪙 Списано: " + fmtExc(s.paidExc()) + " EXC" + (paidRub > 0 ? " · закупка на маркетплейсе: " + paidRub + " ₽" : "")
                 + "\n🔎 Признак: срок приёма обмена прошёл, отмены нет (stage " + stage + ")";
@@ -306,9 +314,9 @@ public class Cs2CaseAutoIssueService {
             alertAdmins("⚠️ Автовыдача кейса: не удалось отклонить и вернуть EXC по заявке М-" + s.displayId() + " (" + escape(e.getMessage()) + "). Проверьте вручную.");
             return;
         }
-        bot.caseAutoNotify(s.telegramId(), "❌ <b>Кейс не выдан</b>\n\n📦 " + escape(s.title()) + " · заявка <b>М-" + s.displayId() + "</b>\n"
+        bot.caseAutoNotify(s.telegramId(), "❌ <b>" + noun(s) + " не выдан</b>\n\n📦 " + escape(s.title()) + " · заявка <b>М-" + s.displayId() + "</b>\n"
                 + escape(playerText) + "\n\n🪙 <b>" + fmtExc(s.paidExc()) + " EXC</b> вернулись на баланс."
-                + (notAccepted ? "\n⏳ Кейсы будут недоступны 30 дней." : ""), null);
+                + (notAccepted ? "\n⏳ Кейсы и скины будут недоступны 30 дней." : ""), null);
         if (adminDetail != null) {
             alertAdmins("⚠️ Автовыдача кейса: заявка М-" + s.displayId() + " отклонена, EXC возвращены. Причина: " + escape(adminDetail));
         }        if (notAccepted && missedInRow.incrementAndGet() >= PAUSE_AFTER_MISSED && !paused) {
@@ -326,11 +334,29 @@ public class Cs2CaseAutoIssueService {
         }
     }
 
+    private static boolean isCs2Group(String group) {
+        return Cs2CaseCatalog.GROUP.equals(group) || Cs2SkinCatalog.GROUP.equals(group);
+    }
+
+    private static String noun(Snap s) {
+        return Cs2SkinCatalog.GROUP.equals(s.group()) ? "Скин" : "Кейс";
+    }
+
+    private Def findDef(String title) {
+        for (Cs2CaseCatalog.CaseDef c : catalog.all()) {
+            if (c.title().equals(title)) return new Def(c.hashName(), c.costRub(), MAX_MARKUP);
+        }
+        for (Cs2SkinCatalog.SkinDef k : skinCatalog.all()) {
+            if (k.title().equals(title)) return new Def(k.hashName(), k.costRub(), MAX_MARKUP_SKIN);
+        }
+        return null;
+    }
+
     private Snap snapshot(Long id) {
         return tx.execute(st -> requestRepository.findById(id).map(r -> new Snap(r.getId(), r.getStatus(), r.getRewardItem().getTitle(),
                 r.getPayoutDetails(), r.getUser().getTelegramId(), r.getDisplayId(), r.getUser().getNickname(),
                 rewardService.actualPaidPrice(r), r.getCreatedAt(),
-                Cs2CaseCatalog.GROUP.equals(r.getRewardItem().getPurchaseGroup()))).orElse(null));
+                r.getRewardItem().getPurchaseGroup())).orElse(null));
     }
 
     /** Минимальный интервал между запросами к маркетплейсу: он удаляет ключ при более чем 5 запросах в секунду, держим около 2 в секунду на все потоки сразу. */

@@ -270,7 +270,7 @@ function ShopItemsView({ expanded, onToggle }) {
 
   // Кастомизация (рамки аватара) объединена с титулами в разделе «Предметы» — здесь не дублируем;
   // кейсы CS2 показываем отдельными плитками (Cs2CasesSection), а не обычным списком.
-  const groupedRaw = items.filter(item => item.category !== 'Кастомизация' && item.category !== 'CS2 кейсы').reduce((acc, item) => {
+  const groupedRaw = items.filter(item => item.category !== 'Кастомизация' && item.category !== 'CS2 кейсы' && item.category !== 'CS2 скины').reduce((acc, item) => {
     const cat = item.category || 'Другое';
     (acc[cat] = acc[cat] || []).push(item);
     return acc;

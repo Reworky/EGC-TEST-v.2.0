@@ -1,0 +1,75 @@
+{
+  "_comment": "Каталог скинов CS2 для магазина наград (24.11.2026). hashName - market_hash_name в Steam (со степенью износа), costRub - минимальная цена на market.csgo.com на 24.11.2026 (перед включением сверить, цены плавают). Картинки: src/main/resources/skins/<key>.jpg (с cdn2.csgo.com, на тёмном фоне 1280x960). Цена в EXC: закупка x 141.6, вверх до сотен. Автовыдача: Cs2CaseAutoIssueService.",
+  "skins": [
+    {
+      "key": "wintergreen",
+      "name": "AK-47 | Wintergreen",
+      "hashName": "AK-47 | Wintergreen (Field-Tested)",
+      "wear": "Field-Tested",
+      "costRub": 34.09
+    },
+    {
+      "key": "ticket_to_hell",
+      "name": "USP-S | Ticket to Hell",
+      "hashName": "USP-S | Ticket to Hell (Field-Tested)",
+      "wear": "Field-Tested",
+      "costRub": 36.91
+    },
+    {
+      "key": "night_terror",
+      "name": "M4A1-S | Night Terror",
+      "hashName": "M4A1-S | Night Terror (Field-Tested)",
+      "wear": "Field-Tested",
+      "costRub": 41.93
+    },
+    {
+      "key": "pit_viper",
+      "name": "AWP | Pit Viper",
+      "hashName": "AWP | Pit Viper (Field-Tested)",
+      "wear": "Field-Tested",
+      "costRub": 67.98
+    },
+    {
+      "key": "heat_treated",
+      "name": "Desert Eagle | Heat Treated",
+      "hashName": "Desert Eagle | Heat Treated (Field-Tested)",
+      "wear": "Field-Tested",
+      "costRub": 79.97
+    },
+    {
+      "key": "amber_fade_r8",
+      "name": "R8 Revolver | Amber Fade",
+      "hashName": "R8 Revolver | Amber Fade (Minimal Wear)",
+      "wear": "Minimal Wear",
+      "costRub": 90.76
+    },
+    {
+      "key": "solitude",
+      "name": "M4A1-S | Solitude",
+      "hashName": "M4A1-S | Solitude (Field-Tested)",
+      "wear": "Field-Tested",
+      "costRub": 115.0
+    },
+    {
+      "key": "steel_delta",
+      "name": "AK-47 | Steel Delta",
+      "hashName": "AK-47 | Steel Delta (Field-Tested)",
+      "wear": "Field-Tested",
+      "costRub": 140.87
+    },
+    {
+      "key": "slate",
+      "name": "AK-47 | Slate",
+      "hashName": "AK-47 | Slate (Battle-Scarred)",
+      "wear": "Battle-Scarred",
+      "costRub": 281.86
+    },
+    {
+      "key": "cortex",
+      "name": "USP-S | Cortex",
+      "hashName": "USP-S | Cortex (Field-Tested)",
+      "wear": "Field-Tested",
+      "costRub": 275.0
+    }
+  ]
+}

@@ -21,7 +21,7 @@ import ru.gamebot.platform.service.Cs2CaseCatalog;
 @RequiredArgsConstructor
 public class Cs2CaseSeeder implements CommandLineRunner {
 
-    private static final String TRADE_PROMPT = "Укажите вашу ссылку обмена Steam (Trade URL).\n\n"
+    static final String TRADE_PROMPT = "Укажите вашу ссылку обмена Steam (Trade URL).\n\n"
             + "Где взять: Steam → Инвентарь → Предложения обмена → «Кто может отправлять мне предложения обмена?» → ссылка.\n"
             + "Профиль и инвентарь должны быть открытыми, обмен на аккаунте не ограничен, а мобильный аутентификатор Steam привязан: кейс придёт автоматически обменом сразу после покупки: будьте у Steam, принять его нужно в течение около 5 минут.\n\nВведите ссылку:";
 
