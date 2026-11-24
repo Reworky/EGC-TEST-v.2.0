@@ -6095,6 +6095,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return sum > 0 ? "💎 Получи до <b>" + fmtExc(sum) + " ₽</b> за спонсорские квесты.\n\n" : "";
     }
 
+    /** Блок экрана «Вывод пока закрыт» (текст владельца 24.11.2026): отдельный от sponsoredPrizeLine, который используется на других экранах. */
+    private String sponsoredPrizeLockedBlock(AppUser user) {
+        if (healthRatioService.isPartner(user)) return "";
+        long sum = sponsoredPrizeRub(user);
+        return sum > 0 ? "💎 <b>А ещё можно получить до " + fmtExc(sum) + " ₽</b>\nЗа спонсорские квесты, и они выводятся без лимитов." : "";
+    }
+
     private static String partnerInfoBack(String code) {
         return switch (code == null ? "" : code) {
             case "wd" -> "shop:withdraw";
@@ -7798,9 +7805,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String minLine = coins >= min ? "" : " Минимум для вывода - " + fmtExc(min) + " EXC, осталось " + fmtExc(min - coins) + " EXC.";
         long spCoins = Math.max(0, user.getSponsorCoins());
         String balanceLine = sponsor
-                ? "💎 У вас " + fmtExc(spCoins) + " EXCASH ≈ " + fmtExc(Math.round(spCoins / 100.0)) + " ₽ (курс 100%)."
+                ? "💎 <b>Твой баланс</b>\n" + fmtExc(spCoins) + " EXCASH ≈ " + fmtExc(Math.round(spCoins / 100.0)) + " ₽ (курс 100%)."
                         + (spCoins >= min ? "" : " Минимум для вывода - " + fmtExc(min) + " EXCASH, осталось " + fmtExc(min - spCoins) + " EXCASH.")
-                : "💰 У вас " + fmtExc(coins) + " EXC ≈ " + fmtExc(rub) + " ₽ (курс фонда " + ratioPercent + "%)." + minLine;
+                : "💰 <b>Твой баланс</b>\n" + fmtExc(coins) + " EXC ≈ " + fmtExc(rub) + " ₽ (курс фонда " + ratioPercent + "%)." + minLine;
         List<List<InlineKeyboardButton>> lockedRows = new ArrayList<>();
         addSponsoredPrizeRow(lockedRows, user);
         if (dailyCodeGate.block(user) != null) {
@@ -7810,9 +7817,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         addPartnerRow(lockedRows, user, "bl");
         lockedRows.add(List.of(keyboardFactory.callback("⬅️ Назад", backData), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(),
-                "🔒 <b>Вывод пока недоступен</b>\n\n" + escape(block) + "\n\n"
+                "🔒 <b>Вывод пока закрыт</b>\n\n" + escape(block) + "\n\n"
                         + balanceLine + "\n\n"
-                        + sponsoredPrizeLine(user).stripTrailing(),
+                        + sponsoredPrizeLockedBlock(user),
                 keyboardFactory.rowsLayout(lockedRows));
     }
 

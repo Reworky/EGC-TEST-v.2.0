@@ -59,8 +59,10 @@ public class DailyCodeGateService {
         if (need <= 0 || user == null || user.getId() == null) return null;
         long have = codesInWindow(user.getId());
         if (have >= need) return null;
-        return "Для вывода нужно ввести " + need + " " + codesWord(need) + " дня за последние " + WINDOW_DAYS + " дней. У вас: " + have + ". "
-                + "Код дня выходит в канале, вводится в боте кнопкой «🔑 Код дня».";
+        // Текст утверждён владельцем 24.11.2026 (экран «Вывод пока закрыт»)
+        return "Чтобы открыть вывод, введи " + need + " " + codesWord(need) + " дня за последние " + WINDOW_DAYS + " дней.\n"
+                + "Сейчас у тебя: " + have + " из " + need + " 🔑\n"
+                + "Код выходит в канале, вводится в боте кнопкой «🔑 Код дня».";
     }
 
     private static String codesWord(int n) {
