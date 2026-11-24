@@ -24,7 +24,8 @@ public class Cs2CaseCatalog {
     public static final String GROUP = "cs2_case";
     public static final String CATEGORY = "CS2 кейсы";
     private static final String TITLE_PREFIX = "CS2 кейс - ";
-    public record CaseDef(String key, String name, double costRub, boolean withKey, List<String> skins) {
+    /** hashName - market_hash_name предмета в Steam (для покупки на market.csgo.com, автовыдача 24.11.2026). */
+    public record CaseDef(String key, String name, String hashName, double costRub, boolean withKey, List<String> skins) {
         public String title() { return TITLE_PREFIX + name; }
 
         /** Название для игрока: Кейс «Революция». */
@@ -52,7 +53,7 @@ public class Cs2CaseCatalog {
             for (JsonNode node : root.path("cases")) {
                 List<String> skins = new ArrayList<>();
                 node.path("skins").forEach(t -> skins.add(t.asText()));
-                loaded.add(new CaseDef(node.path("key").asText(), node.path("name").asText(), node.path("costRub").asDouble(),
+                loaded.add(new CaseDef(node.path("key").asText(), node.path("name").asText(), node.path("hashName").asText(""), node.path("costRub").asDouble(),
                         node.path("withKey").asBoolean(false), List.copyOf(skins)));
             }
         }

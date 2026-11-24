@@ -297,6 +297,11 @@ public class RewardService {
         if (!rewardItem.isActive() || rewardItem.isComingSoon()) {
             throw new IllegalArgumentException("Эта позиция сейчас недоступна.");
         }
+        // Кейсы CS2 (24.11.2026): ссылка обмена Steam проверяется до списания EXC - по ней автовыдача отправляет предмет
+        if (Cs2CaseCatalog.GROUP.equals(rewardItem.getPurchaseGroup()) && Cs2CaseAutoIssueService.parseTradeUrl(userData) == null) {
+            throw new IllegalArgumentException("Неверная ссылка обмена Steam. Нужна ссылка вида steamcommunity.com/tradeoffer/new/?partner=…&token=… "
+                    + "(Steam → Инвентарь → Предложения обмена → «Кто может отправлять мне предложения обмена?»).");
+        }
         if (WITHDRAWAL_CATEGORY.equals(rewardItem.getCategory())) {
             // Вывод через каталог — только Telegram Stars; рубли и TON идут своими методами. «1 заявка в сутки» проверяем
             // здесь, под блокировкой игрока: раньше она стояла только на входе в меню и обходилась старыми кнопками и параллельными запросами.
@@ -397,7 +402,11 @@ public class RewardService {
         } else {
             request.setStatus(RewardRequestStatus.PENDING);
         }
-        return rewardRequestRepository.save(request);
+        RewardRequest savedRequest = rewardRequestRepository.save(request);
+        if (Cs2CaseCatalog.GROUP.equals(rewardItem.getPurchaseGroup())) {
+            eventPublisher.publishEvent(new Cs2CaseAutoIssueService.Created(savedRequest.getId())); // автовыдача стартует после коммита
+        }
+        return savedRequest;
     }
 
     public List<RewardRequest> findPendingRequests() {

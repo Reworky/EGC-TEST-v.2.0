@@ -3,6 +3,7 @@
   "cases": [
     {
       "key": "kilowatt",
+      "hashName": "Kilowatt Case",
       "name": "Киловатт",
       "costRub": 6,
       "withKey": false,
@@ -28,6 +29,7 @@
     },
     {
       "key": "revolution",
+      "hashName": "Revolution Case",
       "name": "Революция",
       "costRub": 11.7,
       "withKey": false,
@@ -53,6 +55,7 @@
     },
     {
       "key": "recoil",
+      "hashName": "Recoil Case",
       "name": "Гремучий",
       "costRub": 14.91,
       "withKey": false,
@@ -78,6 +81,7 @@
     },
     {
       "key": "snakebite",
+      "hashName": "Snakebite Case",
       "name": "Змеиный укус",
       "costRub": 22.29,
       "withKey": false,
@@ -103,6 +107,7 @@
     },
     {
       "key": "fracture",
+      "hashName": "Fracture Case",
       "name": "Разлом",
       "costRub": 29.18,
       "withKey": false,
@@ -128,6 +133,7 @@
     },
     {
       "key": "clutch",
+      "hashName": "Clutch Case",
       "name": "Решающий момент",
       "costRub": 34.1,
       "withKey": false,
@@ -153,6 +159,7 @@
     },
     {
       "key": "fever",
+      "hashName": "Fever Case",
       "name": "Лихорадка",
       "costRub": 46.94,
       "withKey": false,
@@ -178,6 +185,7 @@
     },
     {
       "key": "gallery",
+      "hashName": "Gallery Case",
       "name": "Галерейный",
       "costRub": 49.47,
       "withKey": false,
@@ -203,6 +211,7 @@
     },
     {
       "key": "cs20",
+      "hashName": "CS20 Case",
       "name": "CS20",
       "costRub": 63.3,
       "withKey": false,
@@ -228,6 +237,7 @@
     },
     {
       "key": "dreams_nightmares",
+      "hashName": "Dreams & Nightmares Case",
       "name": "Грёзы и кошмары",
       "costRub": 73.6,
       "withKey": false,
@@ -253,6 +263,7 @@
     },
     {
       "key": "danger_zone",
+      "hashName": "Danger Zone Case",
       "name": "Запретная зона",
       "costRub": 82.35,
       "withKey": false,
@@ -278,6 +289,7 @@
     },
     {
       "key": "prisma2",
+      "hashName": "Prisma 2 Case",
       "name": "Призма 2",
       "costRub": 83.71,
       "withKey": false,
@@ -303,6 +315,7 @@
     },
     {
       "key": "prisma",
+      "hashName": "Prisma Case",
       "name": "Призма",
       "costRub": 87.48,
       "withKey": false,
@@ -328,6 +341,7 @@
     },
     {
       "key": "horizon",
+      "hashName": "Horizon Case",
       "name": "Горизонт",
       "costRub": 119.75,
       "withKey": false,
@@ -353,6 +367,7 @@
     },
     {
       "key": "shadow",
+      "hashName": "Shadow Case",
       "name": "Тёмный",
       "costRub": 134.62,
       "withKey": false,
@@ -377,6 +392,7 @@
     },
     {
       "key": "revolver",
+      "hashName": "Revolver Case",
       "name": "Револьверный",
       "costRub": 208.28,
       "withKey": false,
@@ -402,6 +418,7 @@
     },
     {
       "key": "spectrum2",
+      "hashName": "Spectrum 2 Case",
       "name": "Спектр 2",
       "costRub": 233.37,
       "withKey": false,
@@ -427,6 +444,7 @@
     },
     {
       "key": "gamma",
+      "hashName": "Gamma Case",
       "name": "Гамма",
       "costRub": 233.86,
       "withKey": false,

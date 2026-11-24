@@ -23,7 +23,7 @@ public class Cs2CaseSeeder implements CommandLineRunner {
 
     private static final String TRADE_PROMPT = "Укажите вашу ссылку обмена Steam (Trade URL).\n\n"
             + "Где взять: Steam → Инвентарь → Предложения обмена → «Кто может отправлять мне предложения обмена?» → ссылка.\n"
-            + "Профиль и инвентарь должны быть открытыми, а обмен на вашем аккаунте не ограничен.\n\nВведите ссылку:";
+            + "Профиль и инвентарь должны быть открытыми, обмен на аккаунте не ограничен, а мобильный аутентификатор Steam привязан: кейс придёт автоматически обменом.\n\nВведите ссылку:";
 
     private final RewardItemRepository rewardItemRepository;
     private final Cs2CaseCatalog catalog;

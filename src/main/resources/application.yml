@@ -55,6 +55,8 @@ app:
   payout-channel-username: ${PAYOUT_CHANNEL_USERNAME:@egc_payouts}
   # Кейсы CS2 в магазине наград: каталог виден всем; обмен включается только при true (пока false - кнопка «Обмен скоро откроется»)
   cs2-cases-enabled: ${CS2_CASES_ENABLED:false}
+  # Ключ API market.csgo.com для автовыдачи кейсов CS2 (покупка с отправкой на Trade URL игрока); без ключа заявки на кейсы идут вручную
+  market-csgo-api-key: ${MARKET_CSGO_API_KEY:}
   # EGC VPN: выключен, пока VPN_ENABLED не true. Панель 3x-ui (inbound hysteria), клиенты создаются через её API; адрес, логин и пароль только из окружения
   vpn-enabled: ${VPN_ENABLED:false}
   vpn-xui-url: ${VPN_XUI_URL:}

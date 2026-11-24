@@ -110,6 +110,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private static final Map<String, String> PLATFORM_OPTIONS = new LinkedHashMap<>();
     private static final Map<String, String> INTEREST_OPTIONS = new LinkedHashMap<>();
     private volatile String shopBannerFileId = null;
+    private final ru.gamebot.platform.service.Cs2CaseAutoIssueService cs2CaseAutoIssueService;
     private volatile String hallOfFameFileId = null;
     private volatile String botActivationInviteLink = null;
 
@@ -32028,8 +32029,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         notifyAdminsAboutRewardRequest(user, reward, null);
     }
 
+    /** Сообщения автовыдачи кейсов CS2 (Cs2CaseAutoIssueService): игроку (если userText задан) и/или всем админам (если adminText задан). Тексты в HTML. */
+    public void caseAutoNotify(Long userTelegramId, String userText, String adminText) {
+        if (userTelegramId != null && userText != null) {
+            sendText(userTelegramId, userText, null);
+        }
+        if (adminText != null) {
+            for (Long adminId : adminService.allAdminIds()) {
+                sendText(adminId, adminText, null);
+            }
+        }
+    }
+
+    /** Заявка на кейс идёт автовыдачей: менеджерам карточку «Новая заявка» не шлём (о закрытых выплатах админам пишет сама автовыдача). */
+    private boolean autoIssuedCase(RewardItem reward) {
+        return reward != null && ru.gamebot.platform.service.Cs2CaseCatalog.GROUP.equals(reward.getPurchaseGroup()) && cs2CaseAutoIssueService.isActive();
+    }
+
     /** Уведомление модераторам о новой заявке на награду: полная карточка (как у вывода), если известна заявка. */
     public void notifyAdminsAboutRewardRequest(AppUser user, RewardItem reward, String userGameData, RewardRequest req) {
+        if (autoIssuedCase(reward)) return;
         if (req == null) {
             notifyAdminsAboutRewardRequest(user, reward, userGameData);
             return;
@@ -32046,6 +32065,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     public void notifyAdminsAboutRewardRequest(AppUser user, RewardItem reward, String userGameData) {
+        if (autoIssuedCase(reward)) return;
         InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("📥 Открыть заявки", "admin:reward:requests"))
         ));
