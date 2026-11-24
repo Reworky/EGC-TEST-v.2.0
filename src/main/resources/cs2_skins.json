@@ -2,6 +2,41 @@
   "_comment": "Каталог скинов CS2 для магазина наград (24.11.2026). hashName - market_hash_name в Steam (со степенью износа), costRub - минимальная цена на market.csgo.com на 24.11.2026 (перед включением сверить, цены плавают). Картинки: src/main/resources/skins/<key>.jpg (с cdn2.csgo.com, на тёмном фоне 1280x960). Цена в EXC: закупка x 141.6, вверх до сотен. Автовыдача: Cs2CaseAutoIssueService.",
   "skins": [
     {
+      "key": "red_quartz",
+      "name": "Tec-9 | Red Quartz",
+      "hashName": "Tec-9 | Red Quartz (Field-Tested)",
+      "wear": "Field-Tested",
+      "costRub": 19.67
+    },
+    {
+      "key": "candy_apple",
+      "name": "MAC-10 | Candy Apple",
+      "hashName": "MAC-10 | Candy Apple (Factory New)",
+      "wear": "Factory New",
+      "costRub": 21.01
+    },
+    {
+      "key": "alpine_camo",
+      "name": "USP-S | Alpine Camo",
+      "hashName": "USP-S | Alpine Camo (Field-Tested)",
+      "wear": "Field-Tested",
+      "costRub": 21.19
+    },
+    {
+      "key": "bronze_deco",
+      "name": "Desert Eagle | Bronze Deco",
+      "hashName": "Desert Eagle | Bronze Deco (Field-Tested)",
+      "wear": "Field-Tested",
+      "costRub": 22.55
+    },
+    {
+      "key": "etch_lord",
+      "name": "M4A4 | Etch Lord",
+      "hashName": "M4A4 | Etch Lord (Field-Tested)",
+      "wear": "Field-Tested",
+      "costRub": 27.98
+    },
+    {
       "key": "wintergreen",
       "name": "AK-47 | Wintergreen",
       "hashName": "AK-47 | Wintergreen (Field-Tested)",
@@ -58,18 +93,18 @@
       "costRub": 140.87
     },
     {
-      "key": "slate",
-      "name": "AK-47 | Slate",
-      "hashName": "AK-47 | Slate (Battle-Scarred)",
-      "wear": "Battle-Scarred",
-      "costRub": 281.86
-    },
-    {
       "key": "cortex",
       "name": "USP-S | Cortex",
       "hashName": "USP-S | Cortex (Field-Tested)",
       "wear": "Field-Tested",
       "costRub": 275.0
+    },
+    {
+      "key": "slate",
+      "name": "AK-47 | Slate",
+      "hashName": "AK-47 | Slate (Battle-Scarred)",
+      "wear": "Battle-Scarred",
+      "costRub": 281.86
     }
   ]
 }
