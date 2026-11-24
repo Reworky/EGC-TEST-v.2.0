@@ -229,6 +229,9 @@ public class Cs2CaseAutoIssueService {
         long nowSec = System.currentTimeMillis() / 1000;
         String cancellation = data.path("cancellation_reason").isNull() ? "" : data.path("cancellation_reason").asText("");
         String causer = data.path("causer").isNull() ? "" : data.path("causer").asText("");
+        if (stage == 5 || !cancellation.isEmpty() || stage == 2 || (receiveUntil > 0 && nowSec > receiveUntil + RECEIVE_BUFFER_SEC)) {
+            log.info("[Cs2CaseAutoIssue] decision for request {}: {}", id, data); // сырой ответ маркетплейса для разбора признаков успеха/отмены (ключа в нём нет)
+        }
         if (stage == 5 || !cancellation.isEmpty()) {
             // обмен отменён или истёк: если виноват продавец - игрок не при чём (без блока кейсов), иначе игрок не принял вовремя
             boolean sellerFault = "seller".equalsIgnoreCase(causer);
@@ -237,7 +240,7 @@ public class Cs2CaseAutoIssueService {
         } else if (stage == 2 || (receiveUntil > 0 && nowSec > receiveUntil + RECEIVE_BUFFER_SEC && data.path("settlement").asLong(0) > 0)) {
             // stage 2 маркетплейс ставит не сразу (по факту 24.11.2026 у успешного обмена stage остаётся 1 до конца 7-дневного периода): считаем кейс полученным,
             // когда срок приёма receive_until прошёл с запасом, обмен не отменён и не истёк
-            complete(s, data.path("paid").asDouble(0));
+            complete(s, data.path("paid").asDouble(0), stage);
         } else if (s.createdAt() != null && s.createdAt().isBefore(LocalDateTime.now().minusHours(12)) && alerted.add(id)) {
             alertAdmins("⚠️ Кейс по заявке М-" + s.displayId() + " не передан уже больше 12 часов (stage " + stage + "). Проверьте на market.csgo.com.");
         }
@@ -271,7 +274,7 @@ public class Cs2CaseAutoIssueService {
         }
     }
 
-    private void complete(Snap s, double paidRub) {
+    private void complete(Snap s, double paidRub, int stage) {
         try {
             rewardService.approveRequest(s.id());
         } catch (IllegalArgumentException alreadyHandled) {
@@ -282,7 +285,8 @@ public class Cs2CaseAutoIssueService {
                 + "🪙 Списано: <b>" + fmtExc(s.paidExc()) + " EXC</b>\n\nПриятного открытия 🎉\nЧто-то не так? Напишите в поддержку.";
         String admin = "✅ <b>Закрыта выплата (автовыдача кейса)</b>\n\nЗаявка М-" + s.displayId() + " · " + escape(s.title()) + "\n"
                 + "👤 " + escape(s.nick()) + " (" + s.telegramId() + ")\n"
-                + "🪙 Списано: " + fmtExc(s.paidExc()) + " EXC" + (paidRub > 0 ? " · закупка на маркетплейсе: " + paidRub + " ₽" : "");
+                + "🪙 Списано: " + fmtExc(s.paidExc()) + " EXC" + (paidRub > 0 ? " · закупка на маркетплейсе: " + paidRub + " ₽" : "")
+                + "\n🔎 Признак: срок приёма обмена прошёл, отмены нет (stage " + stage + ")";
         bot.caseAutoNotify(s.telegramId(), player, admin);
     }
 
