@@ -152,6 +152,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final GameCatalogService gameCatalogService;
     private final ru.gamebot.platform.service.GameCoverService gameCoverService;
     private final ru.gamebot.platform.service.TrafficSourceService trafficSourceService;
+    private final ru.gamebot.platform.service.ThreadsPublishService threadsPublishService;
     private final ru.gamebot.platform.service.TrafficFunnelService trafficFunnelService;
     private final ru.gamebot.platform.service.QuestPoolHealthService questPoolHealthService;
     private final ru.gamebot.platform.service.AnalyticsService analyticsService;
@@ -633,6 +634,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (text != null && text.startsWith("/goldenhour") && isEffectiveAdmin(user)) {
             handleGoldenHourCommand(user, text.trim());
+            return;
+        }
+
+        if (text != null && (text.equals("/threads") || text.startsWith("/threads ")) && isEffectiveAdmin(user)) {
+            handleThreadsCommand(user, text.trim());
             return;
         }
 
@@ -9034,6 +9040,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("pulsethr", "reset|log|КЛЮЧ ЗЕЛЁНЫЙ КРАСНЫЙ", "Пороги вкладки «Пульс проекта»: список, изменить, вернуть стартовые, журнал"),
             new AdminCommand("vpn", "ID [trial|paid|off]", "EGC VPN (пока без экранов игрока): статус игрока, выдать пробный/оплаченный месяц, отключить"),
             new AdminCommand("push", "status|on NAME|off NAME", "Короткие рассылки игрокам: буст выходных, новые квесты по игре, гонка отрядов, гонка за Зал славы"),
+            new AdminCommand("threads", "status|on|off", "Автопубликация месячного плана в Threads: статус, следующий пост, включить или выключить"),
             new AdminCommand("widget", "status|on|off|test", "HTML-виджеты в сообщениях (Bot API 10.4): калькулятор курса на экране «Как стать партнёром». test - прислать виджет себе"),
             new AdminCommand("excwheel", "status|on|off|slot on|off|age on|off|stats [дней]", "Колесо за EXC (спин 1 000 EXC, призы без EXC): включить/выключить, возрастное условие 18+, сводка"),
             new AdminCommand("goldenhour", "status|on|off|hour N|percent N|max N|push on|off|pushtest", "Золотой час: окно, бонус, лимит квестов, напоминание игрокам"),
@@ -9054,7 +9061,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("excash", "ID [±сумма] [уведомить] [причина]", "Спонсорский баланс EXCASH: без суммы - показать игровой и спонсорский баланс игрока; +сумма - начислить EXCASH, -сумма - списать (ниже нуля нельзя); слово «уведомить» отправляет игроку сообщение о начислении"),
             new AdminCommand("ugcpilot", "status|start|stop", "Пилот «UGC в EXCASH»: от 500 просмотров платим EXCASH с удержанием 3 дня, бюджет 300 000 EXCASH (3 000 ₽), граница 100 000 EXCASH в сутки на игрока, срок 14 дней; status - расход и остаток, start - запустить, stop - остановить"),
             new AdminCommand("tocash", "ID сумма", "Перенести EXC с игрового баланса на спонсорский (EXCASH) 1 к 1, для игроков, которые просят перенести старые спонсорские заработки. Одна транзакция, оба баланса показываются в ответе"),
-            new AdminCommand("wowpay", "ID", "Награда за квест World of Warships: игрок есть в списке конверсий лендинга (партнёр подтвердил игру). Начисляет награду квеста и уведомляет игрока; повторно тому же игроку не начисляет"),
+            new AdminCommand("wowpay", "ID [rodina]", "Награда за игровой квест (по умолчанию World of Warships, с «rodina» - Родина РП): игрок есть в списке конверсий лендинга (партнёр подтвердил игру). Начисляет награду квеста и уведомляет игрока; повторно тому же игроку не начисляет"),
             new AdminCommand("psbbonus", "ID [повтор|карта|отказ]", "Выплата ПСБ (карта «Твой кэшбэк») после подтверждения банка: начисляет игроку 💎 50 000 EXCASH (≈ 500 ₽, награда клуба; плюс компенсация траты, если она есть), переводить деньги не нужно. Слово «карта» - прежний ручной перевод рублями без EXCASH, «отказ» - банк не подтвердил карту (игроку уйдёт сообщение, ожидание снимется), «повтор» - повторная выплата"),
             new AdminCommand("ubrrbonus", "ID [повтор|карта|отказ]", "Выплата УБРиР (карта «Моя Жизнь») после подтверждения банка: начисляет игроку 💎 50 000 EXCASH (≈ 500 ₽, награда клуба; плюс компенсация траты, если она есть), переводить деньги не нужно. Слово «карта» - прежний ручной перевод рублями без EXCASH, «отказ» - банк не подтвердил карту (игроку уйдёт сообщение, ожидание снимется), «повтор» - повторная выплата"),
             new AdminCommand("sovcombonus", "ID [повтор|карта|отказ]", "Выплата Совкомбанк (кредитная карта 180 дней без %) после подтверждения банка: начисляет игроку 💎 150 000 EXCASH (≈ 1500 ₽, награда клуба; плюс компенсация траты, если она есть), переводить деньги не нужно. Слово «карта» - прежний ручной перевод рублями без EXCASH, «отказ» - банк не подтвердил карту (игроку уйдёт сообщение, ожидание снимется), «повтор» - повторная выплата"),
@@ -11021,11 +11028,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Игровой оффер ActionPay (World of Warships, оффер 14951): своя карточка по макету владельца 18.11.2026 - баннер, суть, шаги, метка «Реклама», ссылка кнопкой. */
     private static final String GAME_OFFER_ID = "wows";
+    /** Игровые офферы через лендинг: wows (ActionPay) и rodina (Admitad, 24.11.2026). */
+    private static final java.util.Set<String> GAME_OFFER_IDS = java.util.Set.of("wows", "rodina");
 
     /** Квест ведёт на страницу-лендинг партнёра; постбеков и ключей сети в боте нет: награду начисляет админ командой /wowpay ID по списку конверсий лендинга. */
     private boolean isGameOfferQuest(Quest quest) {
         return quest != null && quest.isExternalAutoApprove() && "landing".equals(quest.getExternalNetwork())
-                && GAME_OFFER_ID.equals(quest.getExternalOfferId());
+                && quest.getExternalOfferId() != null && GAME_OFFER_IDS.contains(quest.getExternalOfferId());
     }
 
     /** Первая ссылка http(s) из текста (персональная ссылка игрока из инструкции) или null. */
@@ -11135,15 +11144,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String[] p = text.split("\\s+");
             Long targetId = p.length > 1 ? parseLong(p[1]) : null;
             if (targetId == null) {
-                sendText(admin.getTelegramId(), "⚠️ Формат: <code>/wowpay ID</code>, где ID - Telegram ID игрока из списка конверсий лендинга.", null);
+                sendText(admin.getTelegramId(), "⚠️ Формат: <code>/wowpay ID</code> (World of Warships) или <code>/wowpay ID rodina</code> (Родина РП), где ID - Telegram ID игрока из списка конверсий лендинга.", null);
                 return;
             }
+            String offerKey = p.length > 2 ? p[2].toLowerCase(java.util.Locale.ROOT) : GAME_OFFER_ID;
             AppUser target = userService.findByTelegramId(targetId).orElse(null);
             if (target == null) {
                 sendText(admin.getTelegramId(), "⚠️ Игрок с ID " + targetId + " не найден.", null);
                 return;
             }
-            Quest gameQuest = questService.findAllSponsored().stream().filter(this::isGameOfferQuest).findFirst().orElse(null);
+            Quest gameQuest = questService.findAllSponsored().stream().filter(q -> isGameOfferQuest(q) && offerKey.equals(q.getExternalOfferId())).findFirst().orElse(null);
             if (gameQuest == null) {
                 sendText(admin.getTelegramId(), "⚠️ Квест игрового оффера не найден.", null);
                 return;
@@ -11171,7 +11181,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     : title.contains("instagram") ? "ugc_instagram_banner.jpg" : null;
             if (ugcBanner != null && getClass().getResource("/" + ugcBanner) != null) return ugcBanner;
         }
-        if (isGameOfferQuest(quest) && getClass().getResource("/wows_quest_banner.jpg") != null) return "wows_quest_banner.jpg";
+        if (isGameOfferQuest(quest) && GAME_OFFER_ID.equals(quest.getExternalOfferId()) && getClass().getResource("/wows_quest_banner.jpg") != null) return "wows_quest_banner.jpg";
         ru.gamebot.platform.service.PartnerMission bannerPm = ru.gamebot.platform.service.PartnerMissions.forQuest(quest);
         return bannerPm != null && bannerPm.bannerResource() != null && getClass().getResource("/" + bannerPm.bannerResource()) != null ? bannerPm.bannerResource() : null;
     }
@@ -15980,6 +15990,34 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** /widget status|on|off|test - админ. Виджеты выключены по умолчанию. */
+    /** /threads [status|on|off]: автопубликация месячного плана в Threads (ThreadsPublishService). */
+    private void handleThreadsCommand(AppUser admin, String text) {
+        String[] p = text.split("\\s+");
+        String sub = p.length > 1 ? p[1].toLowerCase() : "status";
+        String head = "";
+        if ("on".equals(sub)) {
+            threadsPublishService.setEnabled(true);
+            head = "✅ Автопубликация в Threads включена. Посты выходят по плану, не чаще раза в 3 часа.\n\n";
+        } else if ("off".equals(sub)) {
+            threadsPublishService.setEnabled(false);
+            head = "⏸ Автопубликация в Threads выключена.\n\n";
+        }
+        sendText(admin.getTelegramId(), head + threadsPublishService.statusText()
+                + "\n\n<code>/threads on</code> | <code>/threads off</code>\nТо же самое кнопками: Коммуникации → «🧵 Threads».", null);
+    }
+
+    /** Сообщение от автопубликации в Threads: сбой, токен, первые публикации. */
+    @org.springframework.context.event.EventListener
+    public void onThreadsAlert(ru.gamebot.platform.event.ThreadsAlertEvent event) {
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                sendText(adminId, event.getText(), null);
+            } catch (Exception e) {
+                log.warn("Failed to send Threads alert to admin {}", adminId, e);
+            }
+        }
+    }
+
     private void handleWidgetCommand(AppUser admin, String text) {
         String[] p = text.split("\\s+");
         String sub = p.length > 1 ? p[1].toLowerCase() : "status";
@@ -18178,6 +18216,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "traffic:compare" -> { sendAdminTrafficCompare(user); answerSilently(callbackQuery.getId()); return; }
             case "polls" -> { sendAdminPollList(user); answerSilently(callbackQuery.getId()); return; }
             case "sponsors" -> { sendAdminSponsorList(user); answerSilently(callbackQuery.getId()); return; }
+            case "threads" -> { sendThreadsAdmin(user, null); answerSilently(callbackQuery.getId()); return; }
+            case "threads:on" -> {
+                threadsPublishService.setEnabled(true);
+                sendThreadsAdmin(user, "Включено. Посты выходят по плану, не чаще раза в 3 часа.");
+                answerSilently(callbackQuery.getId());
+                return;
+            }
+            case "threads:off" -> {
+                threadsPublishService.setEnabled(false);
+                sendThreadsAdmin(user, "Выключено. Уже опубликованные посты остаются, новые не выходят.");
+                answerSilently(callbackQuery.getId());
+                return;
+            }
+            case "threads:skip" -> {
+                String skipped = threadsPublishService.skipNext();
+                sendThreadsAdmin(user, skipped == null ? "Постов в плане не осталось." : "Пост " + skipped + " снят с плана.");
+                answerSilently(callbackQuery.getId());
+                return;
+            }
             case "payoutboard" -> { sendPayoutBoardAdmin(user, null); answerSilently(callbackQuery.getId()); return; }
             case "payoutboard:on" -> {
                 saveAppSetting(ru.gamebot.platform.service.PayoutBoardScheduler.ENABLED_KEY, "true");
@@ -22805,6 +22862,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 rows.add(List.of(keyboardFactory.callback("📨 Рассылки: отчёт", "admin:nudgereport")));
                 rows.add(List.of(keyboardFactory.callback("🗳 Голосования", "admin:polls")));
                 rows.add(List.of(keyboardFactory.callback("📰 Контент канала", "admin:cc")));
+                rows.add(List.of(keyboardFactory.callback("🧵 Threads: автопубликация", "admin:threads")));
                 rows.add(List.of(keyboardFactory.callback("📈 Курс дня и красная кнопка", "admin:course")));
                 rows.add(List.of(keyboardFactory.callback("🔑 Код дня и 🎯 цель клуба", "admin:club")));
                 rows.add(List.of(keyboardFactory.callback("📌 Живая лента выплат в канале", "admin:payoutboard")));
@@ -32507,6 +32565,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } catch (Exception e) {
             log.error("Abandoned quests auto close failed", e);
         }
+    }
+
+    /** Админка → «Коммуникации» → «🧵 Threads»: статус автопубликации, ближайшие посты, включить / выключить / снять ближайший. */
+    private void sendThreadsAdmin(AppUser user, String note) {
+        boolean enabled = threadsPublishService.isEnabled();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback(enabled ? "⏹ Выключить" : "▶️ Включить", enabled ? "admin:threads:off" : "admin:threads:on")));
+        rows.add(List.of(keyboardFactory.callback("🚫 Снять ближайший пост", "admin:threads:skip"),
+                keyboardFactory.callback("🔄 Обновить", "admin:threads")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:comm"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(),
+                threadsPublishService.statusText()
+                        + "\n\n<b>Ближайшие посты (время UTC+7):</b>\n" + threadsPublishService.upcomingText(4)
+                        + (note == null ? "" : "\n\n" + escape(note)),
+                keyboardFactory.rowsLayout(rows));
     }
 
     private void sendPayoutBoardAdmin(AppUser user, String note) {

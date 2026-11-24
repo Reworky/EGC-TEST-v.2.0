@@ -2168,6 +2168,52 @@ public class QuestSeeder implements CommandLineRunner {
                     wowCreated ? "Created" : "Updated", WOW_REWARD_EXC);
         }
 
+        // ── Игровой оффер: Родина РП (Admitad, страница-лендинг) ─────────────────────
+        // 24.11.2026 (решение владельца): квест по образцу World of Warships. Постбек Admitad принимает ЛЕНДИНГ (/api/postback-admitad), бот про сеть ничего не знает;
+        // подтверждённых игроков админ видит в списке конверсий лендинга и начисляет награду командой /wowpay ID rodina.
+        // Награда: 30% максимальной выплаты оффера (первое пополнение больше 100 ₽ = 120 ₽) = 36 ₽ = 3 600 EXC (курс проекта 100 EXC = 1 ₽).
+        // ВНИМАНИЕ: правила оффера запрещают мотивированный трафик; запуск - на риск владельца. Квест создаётся НЕАКТИВНЫМ до включения («Управление квестами → Включить»).
+        gameCatalogService.setDifficultyMode("Родина РП", "FLAT", RODINA_REWARD_EXC, 0);
+        Quest rodinaQuest = questRepository.findFirstByTitleAndGameName(RODINA_TITLE, "Родина РП").orElse(null);
+        boolean rodinaCreated = rodinaQuest == null;
+        if (rodinaCreated) {
+            rodinaQuest = new Quest();
+            rodinaQuest.setGameName("Родина РП");
+            rodinaQuest.setParticipantLimit(1000);
+            rodinaQuest.setActive(false);
+            rodinaQuest.setCreatedAt(LocalDateTime.now());
+        }
+        if (rodinaCreated || appSettingRepository.findById(RODINA_CARD_KEY).isEmpty()) {
+            rodinaQuest.setTitle(RODINA_TITLE);
+            rodinaQuest.setPlatform("ПК · Android · Россия");
+            rodinaQuest.setDurationDays(0);
+            rodinaQuest.setDurationText("Бессрочно");
+            rodinaQuest.setRewardXp(0);
+            rodinaQuest.setRewardCoins(RODINA_REWARD_EXC);
+            rodinaQuest.setDescription("Ролевая онлайн-игра: создай персонажа, найди работу и живи в открытом мире. Открой страницу игры, установи её, зарегистрируйся и пополни игровой счёт больше чем на 100 ₽: награду начислим после подтверждения партнёра.");
+            rodinaQuest.setInstruction("Открой страницу игры, скачай её и зарегистрируйся:\n"
+                    + "https://igro-afisha.pages.dev/?tg={TG_ID}#rodina\n\n"
+                    + "Пополни игровой счёт больше чем на 100 ₽: без этого партнёр действие не подтвердит.");
+            rodinaQuest.setRequirements("📎 Как получить\n"
+                    + "1. Нажми «Взять» и открой страницу игры.\n"
+                    + "2. Скачай игру и зарегистрируйся.\n"
+                    + "3. Пополни игровой счёт больше чем на 100 ₽.\n\n"
+                    + "⏳ Подтверждение от партнёра приходит от нескольких дней до 30, после него мы начисляем EXCASH.\n"
+                    + "Реклама · erid: 2bL9aMPo2e49hMef4rqUtWH3qT");
+            rodinaQuest.setExternalAutoApprove(true);
+            rodinaQuest.setExternalOfferId("rodina");
+            rodinaQuest.setExternalNetwork("landing");
+            rodinaQuest.setExternalTargetType("REGISTRATION");
+            rodinaQuest.setExternalMinPaymentRub(null);
+            questRepository.save(rodinaQuest);
+            ru.gamebot.platform.domain.model.AppSetting rodinaMark = new ru.gamebot.platform.domain.model.AppSetting();
+            rodinaMark.setKey(RODINA_CARD_KEY);
+            rodinaMark.setValue(LocalDateTime.now().toString());
+            appSettingRepository.save(rodinaMark);
+            log.info("[QuestSeeder] {} game offer quest: Родина РП (landing), reward {} EXC",
+                    rodinaCreated ? "Created" : "Updated", RODINA_REWARD_EXC);
+        }
+
         // Партнёрские (внешние) квесты бессрочные (решение владельца 18.11.2026): срок задаёт Quest.getDurationDays() (0 у всех externalAutoApprove),
         // здесь один раз снимаем дедлайны с уже взятых заявок, иначе они бы отменились старым сроком (WeeklyResetScheduler.cancelExpiredSubmissions)
         if (appSettingRepository.findById(EXTERNAL_UNLIMITED_KEY).isEmpty()) {
@@ -3229,6 +3275,10 @@ public class QuestSeeder implements CommandLineRunner {
     private static final String WOW_TITLE = "World of Warships: установи и поиграй";
     private static final String WOW_TITLE_OLD = "Зарегистрируйся в World of Warships";
     private static final long WOW_REWARD_EXC = 7800L;
+    /** Родина РП (Admitad): название квеста, награда (EXC), ключ app_settings одноразовой записи (24.11.2026). */
+    private static final String RODINA_TITLE = "Родина РП: зарегистрируйся и пополни";
+    private static final long RODINA_REWARD_EXC = 3600L;
+    private static final String RODINA_CARD_KEY = "rodina.card.v1.done";
     private static final String WOW_CARD_V2_KEY = "wows.card.v6.done";   // v6 (19.11.2026): ссылка на лендинг igro-afisha.pages.dev; v3: из условий убрана фраза про отчёт; v4 (18.11.2026): квест бессрочный, у взятых заявок сняты дедлайны
 
     /** Ключ app_settings: скрытие всех спонсорских квестов, кроме банка ОТП, выполнено (15.11.2026). */
