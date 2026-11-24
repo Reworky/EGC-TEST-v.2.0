@@ -66,6 +66,8 @@ public class Cs2CaseAutoIssueService {
     /** Потолок цены закупки: закупка из каталога x 1,35 + 2 ₽. Покупается самый дешёвый лот, потолок только отсекает скачок цены. */
     private static final double MAX_MARKUP = 1.35;
     private static final int MAX_POLL_PER_CYCLE = 20;
+    /** Запас после срока приёма обмена (receive_until), чтобы маркетплейс успел пометить непринятый обмен отменённым. */
+    private static final long RECEIVE_BUFFER_SEC = 120;
 
     private final Cs2CaseCatalog catalog;
     private final RewardService rewardService;
@@ -220,10 +222,19 @@ public class Cs2CaseAutoIssueService {
         }
         JsonNode data = info.path("data");
         int stage = data.path("stage").asInt(0);
-        if (stage == 2) {
+        long receiveUntil = data.path("receive_until").asLong(0);
+        long nowSec = System.currentTimeMillis() / 1000;
+        String cancellation = data.path("cancellation_reason").isNull() ? "" : data.path("cancellation_reason").asText("");
+        String causer = data.path("causer").isNull() ? "" : data.path("causer").asText("");
+        if (stage == 5 || !cancellation.isEmpty()) {
+            // обмен отменён или истёк: если виноват продавец - игрок не при чём (без блока кейсов), иначе игрок не принял вовремя
+            boolean sellerFault = "seller".equalsIgnoreCase(causer);
+            fail(s, sellerFault ? "Продавец отменил обмен, кейс не передан." : "Обмен в Steam не был принят вовремя (на это даётся около 5 минут), кейс не передан. Кейсы будут недоступны 30 дней.",
+                    "маркетплейс: обмен по заявке М-" + s.displayId() + " отменён (stage " + stage + ", causer '" + causer + "', причина '" + cancellation + "')", !sellerFault);
+        } else if (stage == 2 || (receiveUntil > 0 && nowSec > receiveUntil + RECEIVE_BUFFER_SEC && data.path("settlement").asLong(0) > 0)) {
+            // stage 2 маркетплейс ставит не сразу (по факту 24.11.2026 у успешного обмена stage остаётся 1 до конца 7-дневного периода): считаем кейс полученным,
+            // когда срок приёма receive_until прошёл с запасом, обмен не отменён и не истёк
             complete(s, data.path("paid").asDouble(0));
-        } else if (stage == 5) {
-            fail(s, "Обмен в Steam не был принят вовремя (на это даётся около 5 минут), кейс не передан. Кейсы будут недоступны 30 дней.", "маркетплейс: обмен по заявке М-" + s.displayId() + " истёк (stage 5)", true);
         } else if (s.createdAt() != null && s.createdAt().isBefore(LocalDateTime.now().minusHours(12)) && alerted.add(id)) {
             alertAdmins("⚠️ Кейс по заявке М-" + s.displayId() + " не передан уже больше 12 часов (stage " + stage + "). Проверьте на market.csgo.com.");
         }
@@ -243,7 +254,8 @@ public class Cs2CaseAutoIssueService {
                 if (info == null || !info.path("success").asBoolean(false)) continue; // ручная выдача или нет связи
                 JsonNode data = info.path("data");
                 JsonNode refund = data.path("refund");
-                boolean reversed = data.path("stage").asInt(2) != 2 || (refund.isObject() && refund.size() > 0);
+                boolean cancelled = !data.path("cancellation_reason").isNull() && !data.path("cancellation_reason").asText("").isEmpty();
+                boolean reversed = data.path("stage").asInt(0) == 5 || cancelled || (refund.isObject() && refund.size() > 0);
                 if (reversed && alerted.add(-id)) {
                     Snap s = snapshot(id);
                     alertAdmins("⚠️ Возможна отмена обмена продавцом по заявке М-" + (s == null ? id : s.displayId())
