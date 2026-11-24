@@ -298,8 +298,7 @@ public class RewardService {
             throw new IllegalArgumentException("Эта позиция сейчас недоступна.");
         }
         // Кейсы и скины CS2 (24.11.2026): ссылка обмена Steam проверяется до списания EXC - по ней автовыдача отправляет предмет
-        if ((Cs2CaseCatalog.GROUP.equals(rewardItem.getPurchaseGroup()) || Cs2SkinCatalog.GROUP.equals(rewardItem.getPurchaseGroup()))
-                && Cs2CaseAutoIssueService.parseTradeUrl(userData) == null) {
+        if (Cs2CaseAutoIssueService.isAutoGroup(rewardItem.getPurchaseGroup()) && Cs2CaseAutoIssueService.parseTradeUrl(userData) == null) {
             throw new IllegalArgumentException("Неверная ссылка обмена Steam. Нужна ссылка вида steamcommunity.com/tradeoffer/new/?partner=…&token=… "
                     + "(Steam → Инвентарь → Предложения обмена → «Кто может отправлять мне предложения обмена?»).");
         }
@@ -404,7 +403,7 @@ public class RewardService {
             request.setStatus(RewardRequestStatus.PENDING);
         }
         RewardRequest savedRequest = rewardRequestRepository.save(request);
-        if (Cs2CaseCatalog.GROUP.equals(rewardItem.getPurchaseGroup()) || Cs2SkinCatalog.GROUP.equals(rewardItem.getPurchaseGroup())) {
+        if (Cs2CaseAutoIssueService.isAutoGroup(rewardItem.getPurchaseGroup())) {
             eventPublisher.publishEvent(new Cs2CaseAutoIssueService.Created(savedRequest.getId())); // автовыдача стартует после коммита
         }
         return savedRequest;

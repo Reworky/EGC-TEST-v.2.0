@@ -75,6 +75,7 @@ public class Cs2CaseAutoIssueService {
 
     private final Cs2CaseCatalog catalog;
     private final Cs2SkinCatalog skinCatalog;
+    private final Cs2CapsuleCatalog capsuleCatalog;
     private final RewardService rewardService;
     private final RewardRequestRepository requestRepository;
     private final TransactionTemplate tx;
@@ -87,11 +88,12 @@ public class Cs2CaseAutoIssueService {
     /** Заявки, по которым алерт уже отправлен (чтобы опрос не спамил каждые 30 секунд); сбрасывается при перезапуске. */
     private final Set<Long> alerted = ConcurrentHashMap.newKeySet();
 
-    public Cs2CaseAutoIssueService(Cs2CaseCatalog catalog, Cs2SkinCatalog skinCatalog, RewardService rewardService, RewardRequestRepository requestRepository,
+    public Cs2CaseAutoIssueService(Cs2CaseCatalog catalog, Cs2SkinCatalog skinCatalog, Cs2CapsuleCatalog capsuleCatalog, RewardService rewardService, RewardRequestRepository requestRepository,
                                    PlatformTransactionManager txManager, @Lazy GamePlatformBot bot, ObjectMapper mapper,
                                    @Value("${app.market-csgo-api-key:}") String apiKey) {
         this.catalog = catalog;
         this.skinCatalog = skinCatalog;
+        this.capsuleCatalog = capsuleCatalog;
         this.rewardService = rewardService;
         this.requestRepository = requestRepository;
         this.tx = new TransactionTemplate(txManager);
@@ -257,8 +259,10 @@ public class Cs2CaseAutoIssueService {
     public void watchReversals() {
         if (!isActive()) return;
         LocalDateTime since7 = LocalDateTime.now().minusDays(7);
-        List<Long> ids = new java.util.ArrayList<>(requestRepository.findApprovedIdsSince(Cs2CaseCatalog.GROUP, since7));
-        ids.addAll(requestRepository.findApprovedIdsSince(Cs2SkinCatalog.GROUP, since7));
+        List<Long> ids = new java.util.ArrayList<>();
+        for (String group : AUTO_GROUPS) {
+            ids.addAll(requestRepository.findApprovedIdsSince(group, since7));
+        }
         int checked = 0;
         for (Long id : ids) {
             if (checked >= 40 || alerted.contains(-id)) continue;
@@ -314,7 +318,7 @@ public class Cs2CaseAutoIssueService {
             alertAdmins("⚠️ Автовыдача кейса: не удалось отклонить и вернуть EXC по заявке М-" + s.displayId() + " (" + escape(e.getMessage()) + "). Проверьте вручную.");
             return;
         }
-        bot.caseAutoNotify(s.telegramId(), "❌ <b>" + noun(s) + " не выдан</b>\n\n📦 " + escape(s.title()) + " · заявка <b>М-" + s.displayId() + "</b>\n"
+        bot.caseAutoNotify(s.telegramId(), "❌ <b>" + noun(s) + " " + notIssued(s) + "</b>\n\n📦 " + escape(s.title()) + " · заявка <b>М-" + s.displayId() + "</b>\n"
                 + escape(playerText) + "\n\n🪙 <b>" + fmtExc(s.paidExc()) + " EXC</b> вернулись на баланс."
                 + (notAccepted ? "\n⏳ Кейсы и скины будут недоступны 30 дней." : ""), null);
         if (adminDetail != null) {
@@ -334,12 +338,24 @@ public class Cs2CaseAutoIssueService {
         }
     }
 
+    /** Группы товаров, которые выдаёт автовыдача: кейсы, скины, капсулы. */
+    public static final List<String> AUTO_GROUPS = List.of(Cs2CaseCatalog.GROUP, Cs2SkinCatalog.GROUP, Cs2CapsuleCatalog.GROUP);
+
+    public static boolean isAutoGroup(String group) {
+        return group != null && AUTO_GROUPS.contains(group);
+    }
+
     private static boolean isCs2Group(String group) {
-        return Cs2CaseCatalog.GROUP.equals(group) || Cs2SkinCatalog.GROUP.equals(group);
+        return isAutoGroup(group);
     }
 
     private static String noun(Snap s) {
-        return Cs2SkinCatalog.GROUP.equals(s.group()) ? "Скин" : "Кейс";
+        return Cs2SkinCatalog.GROUP.equals(s.group()) ? "Скин" : Cs2CapsuleCatalog.GROUP.equals(s.group()) ? "Капсула" : "Кейс";
+    }
+
+    /** «не выдан» / «не выдана» по роду существительного. */
+    private static String notIssued(Snap s) {
+        return Cs2CapsuleCatalog.GROUP.equals(s.group()) ? "не выдана" : "не выдан";
     }
 
     private Def findDef(String title) {
@@ -348,6 +364,9 @@ public class Cs2CaseAutoIssueService {
         }
         for (Cs2SkinCatalog.SkinDef k : skinCatalog.all()) {
             if (k.title().equals(title)) return new Def(k.hashName(), k.costRub(), MAX_MARKUP_SKIN);
+        }
+        for (Cs2CapsuleCatalog.CapsuleDef k : capsuleCatalog.all()) {
+            if (k.title().equals(title)) return new Def(k.hashName(), k.costRub(), MAX_MARKUP);
         }
         return null;
     }

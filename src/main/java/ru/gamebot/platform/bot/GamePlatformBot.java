@@ -141,6 +141,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final AdminService adminService;
     private final ru.gamebot.platform.service.Cs2CaseCatalog cs2CaseCatalog;
     private final ru.gamebot.platform.service.Cs2SkinCatalog cs2SkinCatalog;
+    private final ru.gamebot.platform.service.Cs2CapsuleCatalog cs2CapsuleCatalog;
     private final SessionService sessionService;
     private final SupportService supportService;
     private final ru.gamebot.platform.service.SupportHoursService supportHoursService;
@@ -2401,6 +2402,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.startsWith("skin:")) {
             handleSkinCallback(callbackQuery, user, data.substring("skin:".length()));
+            return;
+        }
+        if (data.startsWith("cap:")) {
+            handleCapsuleCallback(callbackQuery, user, data.substring("cap:".length()));
             return;
         }
         if (data.startsWith("case:")) {
@@ -12354,7 +12359,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private boolean isCs2ShopItem(RewardItem r) {
         return "CS2".equals(r.getCategory()) || ru.gamebot.platform.service.Cs2CaseCatalog.CATEGORY.equals(r.getCategory())
-                || ru.gamebot.platform.service.Cs2SkinCatalog.CATEGORY.equals(r.getCategory());
+                || ru.gamebot.platform.service.Cs2SkinCatalog.CATEGORY.equals(r.getCategory())
+                || ru.gamebot.platform.service.Cs2CapsuleCatalog.CATEGORY.equals(r.getCategory());
     }
 
     /** Позиции для раздела «Донат в игры»: всё, кроме CS2 (свой раздел), кастомизации (живёт в «Бустах») и выключенного «EGC Эксклюзив». */
@@ -15123,6 +15129,71 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendResourceBanner(user.getTelegramId(), "cs2_banner.jpg", text, keyboard);
     }
 
+    private void handleCapsuleCallback(CallbackQuery callbackQuery, AppUser user, String arg) {
+        answerSilently(callbackQuery.getId());
+        Integer messageId = callbackQuery.getMessage() != null ? callbackQuery.getMessage().getMessageId() : null;
+        String[] parts = arg.split(":");
+        int index = 0;
+        if ("v".equals(parts[0]) && parts.length == 3) {
+            try {
+                index = Integer.parseInt(parts[2]);
+            } catch (NumberFormatException e) {
+                index = 0;
+            }
+        }
+        boolean sourcePhoto = callbackQuery.getMessage() instanceof Message sourceMessage && sourceMessage.hasPhoto();
+        sendCapsuleCard(user, index, messageId, sourcePhoto);
+    }
+
+    /** Карусель капсул со стикерами CS2 (24.11.2026, по образцу sendCaseCard): картинка с сайта маркетплейса, название, цена в EXC, «Обменять». */
+    private void sendCapsuleCard(AppUser user, int index, Integer sourceMessageId, boolean sourcePhoto) {
+        List<ru.gamebot.platform.service.Cs2CapsuleCatalog.CapsuleDef> list = cs2CapsuleCatalog.all();
+        if (list.isEmpty()) {
+            deleteMessageQuietly(user.getTelegramId(), sourceMessageId);
+            sendCs2Menu(user, null, false);
+            return;
+        }
+        int n = list.size();
+        int idx = ((index % n) + n) % n;
+        ru.gamebot.platform.service.Cs2CapsuleCatalog.CapsuleDef c = list.get(idx);
+        RewardItem item = cs2CapsuleCatalog.isEnabled()
+                ? rewardService.findByPurchaseGroup(ru.gamebot.platform.service.Cs2CapsuleCatalog.GROUP).stream()
+                        .filter(r -> r.getTitle().equals(c.title())).findFirst().orElse(null)
+                : null;
+        long price = item != null ? rewardService.effectivePrice(item) : c.priceExc();
+        StringBuilder text = new StringBuilder("🎟 <b>" + escape(c.name()) + "</b>\n\n");
+        text.append("🪙 Стоимость: <b>").append(price).append(" EXC</b>\n");
+        text.append("🔑 Открывается без ключа.\n");
+        text.append("📲 Придёт обменом в Steam сразу после покупки: принять нужно в течение около 5 минут.\n");
+        if (n > 1) text.append("<i>").append(idx + 1).append(" из ").append(n).append("</i>");
+
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (n > 1) {
+            rows.add(List.of(
+                    keyboardFactory.callback("◀️", "cap:v:all:" + (idx - 1)),
+                    keyboardFactory.callback((idx + 1) + " / " + n, "noop"),
+                    keyboardFactory.callback("▶️", "cap:v:all:" + (idx + 1))));
+        }
+        rows.add(List.of(item != null
+                ? keyboardFactory.callback("🛒 Обменять", "shop:buy:" + item.getId())
+                : keyboardFactory.callback("🔒 Обмен скоро откроется", "noop")));
+        rows.add(List.of(
+                keyboardFactory.callback("⬅️ Назад", "case:menu"),
+                keyboardFactory.callback("🏠 Меню", "menu:main")));
+
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
+        boolean hasImage = getClass().getResource("/" + c.imageResource()) != null;
+        if (hasImage && sourcePhoto && editPhotoMessage(user.getTelegramId(), sourceMessageId, c.imageResource(), text.toString(), keyboard)) {
+            return;
+        }
+        deleteMessageQuietly(user.getTelegramId(), sourceMessageId);
+        if (hasImage) {
+            sendResourceBanner(user.getTelegramId(), c.imageResource(), text.toString(), keyboard);
+        } else {
+            sendText(user.getTelegramId(), text.toString(), keyboard);
+        }
+    }
+
     /** Карусель скинов CS2 (24.11.2026, по образцу sendCaseCard): картинка с сайта маркетплейса, название, износ, цена в EXC, «Обменять». */
     private void sendSkinCard(AppUser user, String type, int index, Integer sourceMessageId, boolean sourcePhoto) {
         List<ru.gamebot.platform.service.Cs2SkinCatalog.SkinDef> list = cs2SkinCatalog.byType(type);
@@ -15222,6 +15293,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!cs2SkinCatalog.all().isEmpty()) {
             rows.add(List.of(keyboardFactory.callback("🔫 Скины (" + cs2SkinCatalog.all().size() + ")", "skin:menu")));
         }
+        if (!cs2CapsuleCatalog.all().isEmpty()) {
+            rows.add(List.of(keyboardFactory.callback("🎟 Капсулы (" + cs2CapsuleCatalog.all().size() + ")", "cap:v:all:0")));
+        }
         rows.add(List.of(
                 keyboardFactory.callback("⬅️ Назад", "menu:shop"),
                 keyboardFactory.callback("🏠 Меню", "menu:main")));
@@ -15276,7 +15350,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 || (data.startsWith("onboarding:") && !data.equals("onboarding:choice") && !data.equals("onboarding:games") && !data.equals("onboarding:cards"))
                 || data.startsWith("dtasks:go") || data.startsWith("battlepass:buy:") || data.startsWith("redbtn:") || data.startsWith("nudgefb:")
                 || data.startsWith("report:submit:") || data.startsWith("review:") || data.startsWith("gemdonate:confirmton:")
-                || data.startsWith("council:") || data.startsWith("case:") || data.startsWith("skin:") || data.equals("noop") || data.startsWith("ugc:");
+                || data.startsWith("council:") || data.startsWith("case:") || data.startsWith("skin:") || data.startsWith("cap:") || data.equals("noop") || data.startsWith("ugc:");
     }
 
     /** Метка в navScreens: экран с картинкой. Такие сообщения чистка ленты НЕ удаляет: после удаления клиент Telegram сбрасывает кэш картинки,
@@ -32149,7 +32223,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Заявка на кейс идёт автовыдачей: менеджерам карточку «Новая заявка» не шлём (о закрытых выплатах админам пишет сама автовыдача). */
     private boolean autoIssuedCase(RewardItem reward) {
         return reward != null && (ru.gamebot.platform.service.Cs2CaseCatalog.GROUP.equals(reward.getPurchaseGroup())
-                || ru.gamebot.platform.service.Cs2SkinCatalog.GROUP.equals(reward.getPurchaseGroup())) && cs2CaseAutoIssueService.acceptsNew();
+                || ru.gamebot.platform.service.Cs2SkinCatalog.GROUP.equals(reward.getPurchaseGroup())
+                || ru.gamebot.platform.service.Cs2CapsuleCatalog.GROUP.equals(reward.getPurchaseGroup())) && cs2CaseAutoIssueService.acceptsNew();
     }
 
     /** Уведомление модераторам о новой заявке на награду: полная карточка (как у вывода), если известна заявка. */

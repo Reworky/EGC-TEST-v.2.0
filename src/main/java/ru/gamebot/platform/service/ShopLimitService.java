@@ -30,7 +30,7 @@ public class ShopLimitService {
     public static final int REAL_VALUE_MIN_AGE = 14;
 
     // 24.11.2026 (владелец): кейсы CS2 (cs2_case) тоже с 14 лет; других лимитов на кейсы нет - только общий месячный лимит трат и вывода
-    private static final java.util.Set<String> REAL_VALUE_GROUPS = java.util.Set.of("gift_card", "steam_topup", "cs2", "cs2_case", "cs2_skin");
+    private static final java.util.Set<String> REAL_VALUE_GROUPS = java.util.Set.of("gift_card", "steam_topup", "cs2", "cs2_case", "cs2_skin", "cs2_capsule");
 
     /** null - можно; иначе текст отказа. Возраст не указан не блокирует здесь: профиль проверяет shopEligibilityBlock. */
     public String realValueAgeBlock(AppUser user, RewardItem item) {
@@ -161,14 +161,16 @@ public class ShopLimitService {
                             "🚫 EGC Council: статус уже активен. Продление доступно через 30 дней после последней покупки.");
                 }
             }
-            case "cs2_case", "cs2_skin" -> {
+            case "cs2_case", "cs2_skin", "cs2_capsule" -> {
                 // 24.11.2026 (владелец): частоты кейсов и скинов нет, но игрок, не принявший обмен вовремя, 30 дней без них - его пропуск бьёт по аккаунту маркетплейса
                 LocalDateTime since = LocalDateTime.now().minusDays(30);
                 String marker = Cs2CaseAutoIssueService.NOT_ACCEPTED_MARKER + "%";
-                long missed = rewardRequestRepository.countRejectedWithMarkerSince(user, Cs2CaseCatalog.GROUP, marker, since)
-                        + rewardRequestRepository.countRejectedWithMarkerSince(user, Cs2SkinCatalog.GROUP, marker, since);
+                long missed = 0;
+                for (String autoGroup : Cs2CaseAutoIssueService.AUTO_GROUPS) {
+                    missed += rewardRequestRepository.countRejectedWithMarkerSince(user, autoGroup, marker, since);
+                }
                 if (missed > 0) {
-                    throw new IllegalArgumentException("🚫 Кейсы и скины временно недоступны: прошлый обмен не был принят вовремя. Доступно через 30 дней после него; если это ошибка, напишите в поддержку.");
+                    throw new IllegalArgumentException("🚫 Кейсы, скины и капсулы временно недоступны: прошлый обмен не был принят вовремя. Доступно через 30 дней после него; если это ошибка, напишите в поддержку.");
                 }
             }
             case "avatar_frame" -> {

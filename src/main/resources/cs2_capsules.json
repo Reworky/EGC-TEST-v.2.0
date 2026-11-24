@@ -1,0 +1,59 @@
+{
+  "_comment": "Каталог капсул со стикерами CS2 для магазина наград (24.11.2026), по образцу кейсов. hashName - market_hash_name в Steam, costRub - минимальная цена на market.csgo.com на 24.11.2026 (перед включением сверить). Капсулы открываются без ключа. Картинки: src/main/resources/capsules/<key>.jpg. Цена в EXC: закупка x 141.6, вверх до сотен. Названия по страницам market.csgo.com; для Antwerp 2022 и Copenhagen 2024 русское название составлено по образцу остальных.",
+  "capsules": [
+    {
+      "key": "paris23_contenders",
+      "name": "Капсула с наклейками соперников BLAST.tv Paris Major 2023",
+      "hashName": "Paris 2023 Contenders Sticker Capsule",
+      "costRub": 4.21
+    },
+    {
+      "key": "paris23_challengers",
+      "name": "Капсула с наклейками претендентов BLAST.tv Paris Major 2023",
+      "hashName": "Paris 2023 Challengers Sticker Capsule",
+      "costRub": 4.97
+    },
+    {
+      "key": "paris23_legends",
+      "name": "Капсула с наклейками легенд BLAST.tv Paris Major 2023",
+      "hashName": "Paris 2023 Legends Sticker Capsule",
+      "costRub": 5.32
+    },
+    {
+      "key": "budapest25_challengers",
+      "name": "Капсула с наклейками претендентов StarLadder Budapest Major 2025",
+      "hashName": "Budapest 2025 Challengers Sticker Capsule",
+      "costRub": 11.71
+    },
+    {
+      "key": "austin25_challengers",
+      "name": "Капсула с наклейками претендентов BLAST.tv Austin Major 2025",
+      "hashName": "Austin 2025 Challengers Sticker Capsule",
+      "costRub": 12.07
+    },
+    {
+      "key": "rio22_challengers",
+      "name": "Капсула с наклейками претендентов IEM Rio Major 2022",
+      "hashName": "Rio 2022 Challengers Sticker Capsule",
+      "costRub": 13.45
+    },
+    {
+      "key": "antwerp22_challengers",
+      "name": "Капсула с наклейками претендентов PGL Antwerp Major 2022",
+      "hashName": "Antwerp 2022 Challengers Sticker Capsule",
+      "costRub": 15.15
+    },
+    {
+      "key": "rio22_contenders",
+      "name": "Капсула с наклейками соперников IEM Rio Major 2022",
+      "hashName": "Rio 2022 Contenders Sticker Capsule",
+      "costRub": 17.03
+    },
+    {
+      "key": "copenhagen24_contenders",
+      "name": "Капсула с наклейками соперников PGL Copenhagen Major 2024",
+      "hashName": "Copenhagen 2024 Contenders Sticker Capsule",
+      "costRub": 18.61
+    }
+  ]
+}
