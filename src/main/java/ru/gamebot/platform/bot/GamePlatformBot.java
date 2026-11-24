@@ -11182,6 +11182,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (ugcBanner != null && getClass().getResource("/" + ugcBanner) != null) return ugcBanner;
         }
         if (isGameOfferQuest(quest) && GAME_OFFER_ID.equals(quest.getExternalOfferId()) && getClass().getResource("/wows_quest_banner.jpg") != null) return "wows_quest_banner.jpg";
+        if (isGameOfferQuest(quest) && "rodina".equals(quest.getExternalOfferId()) && getClass().getResource("/rodina_quest_banner.jpg") != null) return "rodina_quest_banner.jpg";
         ru.gamebot.platform.service.PartnerMission bannerPm = ru.gamebot.platform.service.PartnerMissions.forQuest(quest);
         return bannerPm != null && bannerPm.bannerResource() != null && getClass().getResource("/" + bannerPm.bannerResource()) != null ? bannerPm.bannerResource() : null;
     }
