@@ -210,7 +210,7 @@ public class Cs2CaseAutoIssueService {
         if (stage == 2) {
             complete(s, data.path("paid").asDouble(0));
         } else if (stage == 5) {
-            fail(s, "Обмен в Steam не был принят вовремя, кейс не передан.", "маркетплейс: обмен по заявке М-" + s.displayId() + " истёк (stage 5)");
+            fail(s, "Обмен в Steam не был принят в течение 7 часов, кейс не передан.", "маркетплейс: обмен по заявке М-" + s.displayId() + " истёк (stage 5)");
         } else if (s.createdAt() != null && s.createdAt().isBefore(LocalDateTime.now().minusHours(12)) && alerted.add(id)) {
             alertAdmins("⚠️ Кейс по заявке М-" + s.displayId() + " не передан уже больше 12 часов (stage " + stage + "). Проверьте на market.csgo.com.");
         }
@@ -223,7 +223,7 @@ public class Cs2CaseAutoIssueService {
             return;
         }
         String player = "✅ <b>Кейс отправлен</b>\n\n" + escape(s.title()) + " · заявка <b>М-" + s.displayId() + "</b>.\n"
-                + "Откройте Steam → «Предложения обмена» и примите обмен. Если не пришло, напишите в поддержку.";
+                + "Откройте Steam → «Предложения обмена» и примите обмен в течение 7 часов: потом он отменяется и EXC возвращаются. Если не пришло, напишите в поддержку.";
         String admin = "✅ <b>Закрыта выплата (автовыдача кейса)</b>\n\nЗаявка М-" + s.displayId() + " · " + escape(s.title()) + "\n"
                 + "👤 " + escape(s.nick()) + " (" + s.telegramId() + ")\n"
                 + "🪙 Списано: " + s.paidExc() + " EXC" + (paidRub > 0 ? " · закупка на маркетплейсе: " + paidRub + " ₽" : "");
