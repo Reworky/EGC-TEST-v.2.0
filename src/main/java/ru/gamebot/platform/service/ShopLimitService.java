@@ -29,7 +29,8 @@ public class ShopLimitService {
      *  (решение владельца 09.11.2026; Steam сам принимает аккаунты с 13 лет). Оплата своими деньгами сюда не относится. */
     public static final int REAL_VALUE_MIN_AGE = 14;
 
-    private static final java.util.Set<String> REAL_VALUE_GROUPS = java.util.Set.of("gift_card", "steam_topup", "cs2");
+    // 24.11.2026 (владелец): кейсы CS2 (cs2_case) тоже с 14 лет; других лимитов на кейсы нет - только общий месячный лимит трат и вывода
+    private static final java.util.Set<String> REAL_VALUE_GROUPS = java.util.Set.of("gift_card", "steam_topup", "cs2", "cs2_case");
 
     /** null - можно; иначе текст отказа. Возраст не указан не блокирует здесь: профиль проверяет shopEligibilityBlock. */
     public String realValueAgeBlock(AppUser user, RewardItem item) {
