@@ -219,7 +219,8 @@ public class BrawlQuestVerificationService {
         if (quest.getBrawlVerifyType() == BrawlVerifyType.PARTNER_BATTLES) {
             String partnerTag = submission.getBrawlPartnerTag();
             if (partnerTag == null) return false;
-            boolean partnerPresent = e.teammateTags().stream().anyMatch(t -> t.equalsIgnoreCase(partnerTag));
+            // O/0-эквивалентность как для тега самого игрока (23.11.2026, жалоба @lolkapopio: тег друга сохранён с буквой O, а в battlelog цифра 0 - ни один бой не засчитывался)
+            boolean partnerPresent = e.teammateTags().stream().anyMatch(t -> BrawlStarsApiService.tagsLikelyEqual(t, partnerTag));
             if (!partnerPresent) return false;
         }
         return true;

@@ -295,7 +295,7 @@ public class BrawlStarsApiService {
      *  запросе нельзя, это сломало бы других игроков. Точное сравнение — приоритет; O/0-эквивалентность
      *  — только запасной вариант, когда точное не совпало, и только для решения "это я в этом бою?",
      *  не для чего-либо ещё. */
-    private boolean tagsLikelyEqual(String a, String b) {
+    public static boolean tagsLikelyEqual(String a, String b) {
         if (a == null || b == null) return false;
         if (a.equalsIgnoreCase(b)) return true;
         return a.replace('O', '0').equalsIgnoreCase(b.replace('O', '0'));
