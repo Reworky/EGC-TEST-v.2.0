@@ -263,9 +263,23 @@ public class Cs2CaseAutoIssueService {
                 Cs2CaseCatalog.GROUP.equals(r.getRewardItem().getPurchaseGroup()))).orElse(null));
     }
 
+    /** Минимальный интервал между запросами к маркетплейсу: он удаляет ключ при более чем 5 запросах в секунду, держим около 2 в секунду на все потоки сразу. */
+    private static final long MIN_CALL_INTERVAL_MS = 450;
+    private final Object rateLock = new Object();
+    private long lastCallAtMs = 0;
+
+    private void throttle() throws InterruptedException {
+        synchronized (rateLock) {
+            long wait = lastCallAtMs + MIN_CALL_INTERVAL_MS - System.currentTimeMillis();
+            if (wait > 0) Thread.sleep(wait);
+            lastCallAtMs = System.currentTimeMillis();
+        }
+    }
+
     /** GET к API маркетплейса; null - нет ответа или не JSON. Ключ в логи не попадает. */
     private JsonNode call(String method, Map<String, String> params) {
         try {
+            throttle();
             StringBuilder url = new StringBuilder(API).append(method).append("?key=").append(URLEncoder.encode(apiKey, StandardCharsets.UTF_8));
             for (Map.Entry<String, String> e : params.entrySet()) {
                 url.append('&').append(e.getKey()).append('=').append(URLEncoder.encode(e.getValue(), StandardCharsets.UTF_8));
