@@ -45,6 +45,7 @@ app:
   admitad-postback-token: ${ADMITAD_POSTBACK_TOKEN:}
   mobidea-postback-token: ${MOBIDEA_POSTBACK_TOKEN:}
   leadgid-postback-token: ${LEADGID_POSTBACK_TOKEN:}
+  landing-postback-token: ${LANDING_POSTBACK_TOKEN:}
   adsgram-reward-token: ${ADSGRAM_REWARD_TOKEN:}
   telega-reward-token: ${TELEGA_REWARD_TOKEN:}
   adsgram-api-token: ${ADSGRAM_API_TOKEN:}

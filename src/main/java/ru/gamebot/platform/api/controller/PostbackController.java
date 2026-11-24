@@ -55,6 +55,10 @@ public class PostbackController {
     @Value("${app.leadgid-postback-token:}")
     private String leadgidToken;
 
+    /** Токен лендинга «Афиша игр» (24.11.2026): лендинг принимает постбеки сетей сам и пересылает подтверждённые игровые конверсии сюда. Сети про бота ничего не знают. */
+    @Value("${app.landing-postback-token:}")
+    private String landingToken;
+
     private final ru.gamebot.platform.domain.repository.LeadgidConversionRepository leadgidConversionRepository;
     private final ru.gamebot.platform.domain.repository.QuestSubmissionRepository questSubmissionRepository;
     private final ru.gamebot.platform.service.NewbieFunnelService newbieFunnelService;
@@ -189,6 +193,16 @@ public class PostbackController {
      * или нажал на оффер (e=click). Витрина пересылает это сюда через свою функцию (токен лежит у неё в настройках, у посетителя его нет). В воронку новичка пишется один шаг на игрока;
      * ничего не начисляется и игроку не отправляется. Неизвестные заявки и значения игнорируются.
      */
+    @GetMapping("/landing-offer")
+    public ResponseEntity<String> landingOffer(@RequestParam Map<String, String> params) {
+        if (!isValidToken(params.get("token"), landingToken)) {
+            log.warn("[LandingOffer] Postback rejected: bad token");
+            return ResponseEntity.status(403).body("forbidden");
+        }
+        // subid = Telegram ID игрока, offer = ключ оффера квеста (rodina), id = ID действия в сети (для лога). Размер выплаты лендинг уже проверил.
+        return processConversion("landing", params.get("subid"), params.get("offer"), params.get("id"), null);
+    }
+
     @GetMapping("/landing")
     public ResponseEntity<String> landing(@RequestParam Map<String, String> params) {
         if (!isValidToken(params.get("token"), leadgidToken)) {
