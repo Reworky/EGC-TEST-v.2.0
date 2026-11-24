@@ -17,6 +17,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import jakarta.annotation.PreDestroy;
@@ -51,6 +52,13 @@ public class Cs2CaseAutoIssueService {
 
     private record Snap(Long id, RewardRequestStatus status, String title, String details, Long telegramId, Long displayId,
                         String nick, long paidExc, LocalDateTime createdAt, boolean isCase) {}
+
+    /** Метка в комментарии отклонённой заявки: обмен не принят игроком вовремя (ShopLimitService закрывает такому игроку кейсы на 30 дней). */
+    public static final String NOT_ACCEPTED_MARKER = "[кейс не принят]";
+    /** Сколько непринятых обменов подряд отключают автовыдачу (защита аккаунта: штрафы за чужие пропуски ложатся на нас). */
+    private static final int PAUSE_AFTER_MISSED = 3;
+    private final AtomicInteger missedInRow = new AtomicInteger();
+    private volatile boolean paused = false;
 
     private static final String API = "https://market.csgo.com/api/v2/";
     private static final Pattern PARTNER = Pattern.compile("[?&]partner=(\\d{1,12})");
@@ -90,9 +98,14 @@ public class Cs2CaseAutoIssueService {
         executor.shutdown();
     }
 
-    /** Автовыдача работает: есть ключ маркетплейса и обмен кейсов включён. */
+    /** Автовыдача настроена: есть ключ маркетплейса и обмен кейсов включён (опрос статусов идёт и на паузе, чтобы довести начатые заявки). */
     public boolean isActive() {
         return !apiKey.isEmpty() && catalog.isEnabled();
+    }
+
+    /** Новые заявки берём в автовыдачу: настроена и не на паузе (после серии непринятых обменов заявки на кейсы идут вручную до перезапуска бота). */
+    public boolean acceptsNew() {
+        return isActive() && !paused;
     }
 
     /** {partner, token} из Trade URL Steam (steamcommunity.com/tradeoffer/new/?partner=...&token=...); null - ссылка не подходит. */
@@ -108,7 +121,7 @@ public class Cs2CaseAutoIssueService {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onCreated(Created event) {
-        if (!isActive()) return;
+        if (!acceptsNew()) return;
         executor.submit(() -> {
             try {
                 start(event.requestId());
@@ -210,9 +223,36 @@ public class Cs2CaseAutoIssueService {
         if (stage == 2) {
             complete(s, data.path("paid").asDouble(0));
         } else if (stage == 5) {
-            fail(s, "Обмен в Steam не был принят вовремя (на это даётся около 5 минут), кейс не передан.", "маркетплейс: обмен по заявке М-" + s.displayId() + " истёк (stage 5)");
+            fail(s, "Обмен в Steam не был принят вовремя (на это даётся около 5 минут), кейс не передан. Кейсы будут недоступны 30 дней.", "маркетплейс: обмен по заявке М-" + s.displayId() + " истёк (stage 5)", true);
         } else if (s.createdAt() != null && s.createdAt().isBefore(LocalDateTime.now().minusHours(12)) && alerted.add(id)) {
             alertAdmins("⚠️ Кейс по заявке М-" + s.displayId() + " не передан уже больше 12 часов (stage " + stage + "). Проверьте на market.csgo.com.");
+        }
+    }
+
+    /** Наблюдение за отменой обмена продавцом (политика Steam: до 7 дней): раз в полчаса смотрим выданные автовыдачей кейсы за 7 дней; отмена - алерт админам. */
+    @Scheduled(fixedDelay = 30 * 60 * 1000L, initialDelay = 5 * 60 * 1000L)
+    public void watchReversals() {
+        if (!isActive()) return;
+        List<Long> ids = requestRepository.findApprovedIdsSince(Cs2CaseCatalog.GROUP, LocalDateTime.now().minusDays(7));
+        int checked = 0;
+        for (Long id : ids) {
+            if (checked >= 40 || alerted.contains(-id)) continue;
+            try {
+                JsonNode info = call("get-buy-info-by-custom-id", Map.of("custom_id", "egc-" + id));
+                checked++;
+                if (info == null || !info.path("success").asBoolean(false)) continue; // ручная выдача или нет связи
+                JsonNode data = info.path("data");
+                JsonNode refund = data.path("refund");
+                boolean reversed = data.path("stage").asInt(2) != 2 || (refund.isObject() && refund.size() > 0);
+                if (reversed && alerted.add(-id)) {
+                    Snap s = snapshot(id);
+                    alertAdmins("⚠️ Возможна отмена обмена продавцом по заявке М-" + (s == null ? id : s.displayId())
+                            + (s == null ? "" : " (" + escape(s.title()) + ", " + escape(s.nick()) + ")")
+                            + ": заявка у нас закрыта и EXC списаны, а на маркетплейсе обмен выглядит отменённым. Проверьте на market.csgo.com, игрок мог остаться без кейса.");
+                }
+            } catch (Exception e) {
+                log.warn("[Cs2CaseAutoIssue] reversal watch failed for request {}", id, e);
+            }
         }
     }
 
@@ -222,6 +262,7 @@ public class Cs2CaseAutoIssueService {
         } catch (IllegalArgumentException alreadyHandled) {
             return;
         }
+        missedInRow.set(0);
         String player = "✅ <b>Кейс отправлен</b>\n\n" + escape(s.title()) + " · заявка <b>М-" + s.displayId() + "</b>.\n"
                 + "Откройте Steam → «Предложения обмена» и примите обмен сразу, как он придёт: на это даётся около 5 минут, потом он отменяется и EXC возвращаются. Если не пришло, напишите в поддержку.";
         String admin = "✅ <b>Закрыта выплата (автовыдача кейса)</b>\n\nЗаявка М-" + s.displayId() + " · " + escape(s.title()) + "\n"
@@ -232,8 +273,13 @@ public class Cs2CaseAutoIssueService {
 
     /** Отклоняем заявку (EXC возвращаются), пишем игроку причину; adminDetail != null - ещё и алерт админам. */
     private void fail(Snap s, String playerText, String adminDetail) {
+        fail(s, playerText, adminDetail, false);
+    }
+
+    /** notAccepted - игрок не принял обмен вовремя: комментарий получает метку (блок кейсов на 30 дней), счётчик подряд идущих пропусков растёт. */
+    private void fail(Snap s, String playerText, String adminDetail, boolean notAccepted) {
         try {
-            rewardService.rejectRequest(s.id(), playerText);
+            rewardService.rejectRequest(s.id(), (notAccepted ? NOT_ACCEPTED_MARKER + " " : "") + playerText);
         } catch (IllegalArgumentException alreadyHandled) {
             return;
         } catch (Exception e) {
@@ -245,6 +291,10 @@ public class Cs2CaseAutoIssueService {
                 + escape(playerText) + "\n🪙 " + s.paidExc() + " EXC вернулись на баланс.", null);
         if (adminDetail != null) {
             alertAdmins("⚠️ Автовыдача кейса: заявка М-" + s.displayId() + " отклонена, EXC возвращены. Причина: " + escape(adminDetail));
+        }        if (notAccepted && missedInRow.incrementAndGet() >= PAUSE_AFTER_MISSED && !paused) {
+            paused = true;
+            alertAdmins("🛑 <b>Автовыдача кейсов остановлена</b>: " + PAUSE_AFTER_MISSED + " обмена подряд не приняты игроками (штрафы за это могут лечь на аккаунт маркетплейса). "
+                    + "Новые заявки на кейсы идут вручную, начатые заявки доводятся. Вернуть автовыдачу: перезапуск бота (деплой).");
         }
     }
 

@@ -87,6 +87,14 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
     @Query("SELECT COUNT(r) FROM RewardRequest r WHERE r.user = :user AND r.rewardItem.purchaseGroup = 'council_egc' AND r.status NOT IN ('CANCELLED', 'REJECTED') AND r.createdAt >= :since")
     long countActiveCouncilSince(@Param("user") AppUser user, @Param("since") LocalDateTime since);
 
+    /** Отклонённые заявки игрока по группе, чей комментарий начинается с метки (кейс CS2: обмен не принят вовремя), начиная с даты: защита аккаунта на маркетплейсе (24.11.2026). */
+    @Query("SELECT COUNT(r) FROM RewardRequest r WHERE r.user = :user AND r.rewardItem.purchaseGroup = :group AND r.status = 'REJECTED' AND r.adminComment LIKE :marker AND r.createdAt >= :since")
+    long countRejectedWithMarkerSince(@Param("user") AppUser user, @Param("group") String group, @Param("marker") String marker, @Param("since") LocalDateTime since);
+
+    /** id выданных заявок группы, закрытых начиная с даты (наблюдение за отменой обмена продавцом в течение 7 дней). */
+    @Query("SELECT r.id FROM RewardRequest r WHERE r.rewardItem.purchaseGroup = :group AND r.status = 'APPROVED' AND r.paidAt >= :since ORDER BY r.paidAt")
+    List<Long> findApprovedIdsSince(@Param("group") String group, @Param("since") LocalDateTime since);
+
     @Query("SELECT COALESCE(MAX(r.displayId), 0) FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод'")
     long findMaxWithdrawalDisplayId();
 

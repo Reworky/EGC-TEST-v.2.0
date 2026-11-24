@@ -15338,6 +15338,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Спонсорский баланс (18.11.2026): если хватает токенов, предлагаем выбор, чем платить (цена - обычная цена магазина, звёзды - цена партнёра)
         long sponsorPrice = sponsorPayAvailable(user, reward) ? rewardService.sponsorPriceFor(user, reward) : 0;
         boolean sponsorChoice = sponsorPrice > 0 && user.getSponsorCoins() >= sponsorPrice;
+        boolean autoCaseConfirm = autoIssuedCase(reward); // кейс CS2 уйдёт автовыдачей: предупреждаем про 5 минут на приём обмена
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         if (sponsorChoice) {
             rows.add(List.of(
@@ -15357,7 +15358,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + (sponsorChoice ? "💎 Или за EXCASH: <b>" + fmtExc(sponsorPrice) + "</b> (на балансе " + fmtExc(user.getSponsorCoins()) + ")\n" : "")
                         + (data != null && !data.isBlank() ? "📋 Данные для выдачи: <code>" + escape(data) + "</code>\n" : "")
                         + "\n"
-                        + (sponsorChoice
+                        + (autoCaseConfirm
+                                ? "После нажатия «Оформить заявку» EXC спишутся, и кейс сразу уйдёт вам обменом в Steam. Будьте у Steam: принять обмен нужно в течение около 5 минут, иначе он отменится, EXC вернутся, а кейсы закроются на 30 дней."
+                                : sponsorChoice
                                 ? (instant
                                     ? "После нажатия кнопки оплата спишется, и покупка применится сразу."
                                     : "После нажатия «Оформить заявку» оплата спишется и заявка уйдёт модератору.")
@@ -32043,7 +32046,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Заявка на кейс идёт автовыдачей: менеджерам карточку «Новая заявка» не шлём (о закрытых выплатах админам пишет сама автовыдача). */
     private boolean autoIssuedCase(RewardItem reward) {
-        return reward != null && ru.gamebot.platform.service.Cs2CaseCatalog.GROUP.equals(reward.getPurchaseGroup()) && cs2CaseAutoIssueService.isActive();
+        return reward != null && ru.gamebot.platform.service.Cs2CaseCatalog.GROUP.equals(reward.getPurchaseGroup()) && cs2CaseAutoIssueService.acceptsNew();
     }
 
     /** Уведомление модераторам о новой заявке на награду: полная карточка (как у вывода), если известна заявка. */

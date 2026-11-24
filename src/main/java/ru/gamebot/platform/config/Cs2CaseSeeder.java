@@ -33,7 +33,7 @@ public class Cs2CaseSeeder implements CommandLineRunner {
     public void run(String... args) {
         for (Cs2CaseCatalog.CaseDef c : catalog.all()) {
             String description = c.displayName() + (c.withKey() ? " с ключом" : " (без ключа, ключ для открытия покупается отдельно в Steam)") + ". "
-                    + (c.skins().isEmpty() ? "" : "Внутри " + c.skins().size() + " скинов: " + String.join(", ", c.skins()) + ". ") + "Выдаём обменом в Steam на вашу ссылку обмена. Срок - до 24 ч.";
+                    + (c.skins().isEmpty() ? "" : "Внутри " + c.skins().size() + " скинов: " + String.join(", ", c.skins()) + ". ") + "Придёт обменом в Steam на вашу ссылку сразу после покупки: принять обмен нужно в течение около 5 минут.";
             RewardItem item = rewardItemRepository.findByTitle(c.title()).orElseGet(RewardItem::new);
             boolean isNew = item.getId() == null;
             if (isNew) {

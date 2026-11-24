@@ -161,6 +161,14 @@ public class ShopLimitService {
                             "🚫 EGC Council: статус уже активен. Продление доступно через 30 дней после последней покупки.");
                 }
             }
+            case "cs2_case" -> {
+                // 24.11.2026 (владелец): частоты кейсов нет, но игрок, не принявший обмен вовремя, 30 дней без кейсов - его пропуск бьёт по аккаунту маркетплейса
+                long missed = rewardRequestRepository.countRejectedWithMarkerSince(user, Cs2CaseCatalog.GROUP,
+                        Cs2CaseAutoIssueService.NOT_ACCEPTED_MARKER + "%", LocalDateTime.now().minusDays(30));
+                if (missed > 0) {
+                    throw new IllegalArgumentException("🚫 Кейсы временно недоступны: прошлый обмен не был принят вовремя. Доступно через 30 дней после него; если это ошибка, напишите в поддержку.");
+                }
+            }
             case "avatar_frame" -> {
                 // Лимита количества нет — рамки можно покупать/менять сколько угодно раз, по требованию пользователя.
             }
