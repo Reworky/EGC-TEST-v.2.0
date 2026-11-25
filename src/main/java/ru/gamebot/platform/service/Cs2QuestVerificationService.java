@@ -167,17 +167,23 @@ public class Cs2QuestVerificationService {
      *  Если между опросами (раз в 10 мин) сыграно НЕСКОЛЬКО матчей — виден только последний, промежуточные
      *  подходящие матчи можно пропустить; это принятое ограничение открытого API (нет истории матчей). */
     private void checkLastMatch(QuestSubmission submission, Quest quest, Cs2ApiService.PlayerStats stats) {
-        if (submission.getCs2BaselineValue() == null) {
-            submission.setCs2BaselineValue(stats.matchesPlayed());
+        // 25.11.2026: total_matches_played в Steam перестал расти (за 72 часа ни одного «нового матча» при десятках заявок),
+        // поэтому новый матч определяем по «отпечатку» всех last_match_* + счётчиков матчей/раундов. Отпечаток хранится в
+        // cs2BaselineValue как ОТРИЦАТЕЛЬНОЕ число; неотрицательное значение - старый формат (matchesPlayed) → тихо пересчитываем базу.
+        long fingerprint = lastMatchFingerprint(stats);
+        Long stored = submission.getCs2BaselineValue();
+        if (stored == null || stored >= 0) {
+            submission.setCs2BaselineValue(fingerprint);
             questSubmissionRepository.save(submission);
-            log.info("[Cs2AutoVerify] submission={} quest='{}' type={} — baseline captured: matchesPlayed={}",
-                    submission.getId(), quest.getTitle(), quest.getCs2VerifyType(), stats.matchesPlayed());
+            log.info("[Cs2AutoVerify] submission={} quest='{}' type={} - baseline captured: matchesPlayed={} lastMatchKills={} lastMatchDeaths={} lastMatchScore={}",
+                    submission.getId(), quest.getTitle(), quest.getCs2VerifyType(), stats.matchesPlayed(),
+                    stats.lastMatchKills(), stats.lastMatchDeaths(), stats.lastMatchScore());
             return;
         }
-        if (stats.matchesPlayed() <= submission.getCs2BaselineValue()) {
-            log.info("[Cs2AutoVerify] submission={} quest='{}' — no new match yet: matchesPlayed={} baseline={}",
-                    submission.getId(), quest.getTitle(), stats.matchesPlayed(), submission.getCs2BaselineValue());
-            return; // новых матчей с прошлой проверки не было
+        if (fingerprint == stored) {
+            log.debug("[Cs2AutoVerify] submission={} quest='{}' - no new match yet: matchesPlayed={} lastMatchKills={}",
+                    submission.getId(), quest.getTitle(), stats.matchesPlayed(), stats.lastMatchKills());
+            return; // last_match_* и счётчики не изменились с прошлой проверки
         }
         boolean qualifies = switch (quest.getCs2VerifyType()) {
             case LAST_MATCH_KILLS -> stats.lastMatchKills() >= quest.getCs2TargetCount();
@@ -195,13 +201,24 @@ public class Cs2QuestVerificationService {
                         + "matchesPlayed {}→{}, lastMatchKills={} lastMatchDeaths={} lastMatchMvps={} lastMatchScore={} "
                         + "qualifies={}",
                 submission.getId(), quest.getTitle(), quest.getCs2VerifyType(), quest.getCs2TargetCount(),
-                submission.getCs2BaselineValue(), stats.matchesPlayed(), stats.lastMatchKills(), stats.lastMatchDeaths(),
+                stored, stats.matchesPlayed(), stats.lastMatchKills(), stats.lastMatchDeaths(),
                 stats.lastMatchMvps(), stats.lastMatchScore(), qualifies);
-        submission.setCs2BaselineValue(stats.matchesPlayed());
+        submission.setCs2BaselineValue(fingerprint);
         questSubmissionRepository.save(submission);
         if (qualifies) {
             completeSubmission(submission);
         }
+    }
+
+    /** Отпечаток последнего матча: все last_match_* + total_matches_played + total_rounds_played; всегда отрицательный (см. checkLastMatch). */
+    private static long lastMatchFingerprint(Cs2ApiService.PlayerStats stats) {
+        java.util.TreeMap<String, Long> parts = new java.util.TreeMap<>();
+        for (java.util.Map.Entry<String, Long> e : stats.all().entrySet()) {
+            String k = e.getKey();
+            if (k.startsWith("last_match_") || k.equals("total_matches_played") || k.equals("total_rounds_played")) parts.put(k, e.getValue());
+        }
+        long h = parts.toString().hashCode() & 0x7fffffffL;
+        return -h - 1;
     }
 
     /** Сумма career-счётчиков Steam по именам из Quest.cs2StatKeys (нулевые Steam не отдаёт - считаем 0). */
