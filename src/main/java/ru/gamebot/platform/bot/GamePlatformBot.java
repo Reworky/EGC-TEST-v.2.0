@@ -15554,11 +15554,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Просит игрока ввести данные для выдачи (email/ID) и ждёт текст (SHOP_GAME_DATA_INPUT). */
-    /** Куда ведёт «Назад» с экранов покупки: кейсы/капсулы и скины возвращают в свою карусель, остальное - на переданный экран (25.11.2026). */
+    /** Куда ведёт «Назад» с экранов покупки: кейс, капсула и скин возвращают на свою полную карточку в карусели (с картинкой), остальное - на переданный экран (25.11.2026). */
     private String rewardBackTarget(RewardItem reward, String fallback) {
         String g = reward == null ? null : reward.getPurchaseGroup();
-        if (ru.gamebot.platform.service.Cs2SkinCatalog.GROUP.equals(g)) return "skin:menu";
-        if (ru.gamebot.platform.service.Cs2CaseCatalog.GROUP.equals(g) || ru.gamebot.platform.service.Cs2CapsuleCatalog.GROUP.equals(g)) return "case:menu";
+        String title = reward == null ? null : reward.getTitle();
+        if (g == null || title == null) return fallback;
+        if (ru.gamebot.platform.service.Cs2SkinCatalog.GROUP.equals(g)) {
+            List<ru.gamebot.platform.service.Cs2SkinCatalog.SkinDef> l = cs2SkinCatalog.all();
+            for (int i = 0; i < l.size(); i++) if (l.get(i).title().equals(title)) return "skin:v:all:" + i;
+            return "skin:menu";
+        }
+        if (ru.gamebot.platform.service.Cs2CaseCatalog.GROUP.equals(g)) {
+            List<ru.gamebot.platform.service.Cs2CaseCatalog.CaseDef> l = cs2CaseCatalog.all();
+            for (int i = 0; i < l.size(); i++) if (l.get(i).title().equals(title)) return "case:v:all:" + i;
+            return "case:menu";
+        }
+        if (ru.gamebot.platform.service.Cs2CapsuleCatalog.GROUP.equals(g)) {
+            List<ru.gamebot.platform.service.Cs2CapsuleCatalog.CapsuleDef> l = cs2CapsuleCatalog.all();
+            for (int i = 0; i < l.size(); i++) if (l.get(i).title().equals(title)) return "cap:v:all:" + i;
+            return "case:menu";
+        }
         return fallback;
     }
 
