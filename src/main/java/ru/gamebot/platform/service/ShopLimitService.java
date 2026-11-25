@@ -61,6 +61,21 @@ public class ShopLimitService {
         return null;
     }
 
+    /** Игрок из Украины: страна в профиле («Украина», «Україна», «ua»...) или код номера +380. */
+    public boolean isUkrainian(AppUser user) {
+        if ("Украина".equals(CountryNormalizer.canonical(user.getCountry()))) return true;
+        return "Украина".equals(PhoneCountry.fromPhone(user.getPhoneNumber()));
+    }
+
+    /** Текст отказа, если выдача кейсов, скинов и капсул CS2 для региона игрока закрыта (25.11.2026, владелец: Украина «регион временно недоступен»); null - доступно. */
+    public String regionBlock(AppUser user, RewardItem item) {
+        if (item == null || !Cs2CaseAutoIssueService.isAutoGroup(item.getPurchaseGroup())) return null;
+        if (isUkrainian(user)) {
+            return "🚫 Регион временно недоступен. Выдача кейсов, скинов и капсул в вашем регионе пока закрыта.";
+        }
+        return null;
+    }
+
     /** Шаг допуска к покупкам за EXC: done - уже выполнен, text - что сделать (для экрана «прежде чем купить», 23.11.2026). */
     public record Requirement(boolean done, String text) {}
 
@@ -162,6 +177,8 @@ public class ShopLimitService {
                 }
             }
             case "cs2_case", "cs2_skin", "cs2_capsule" -> {
+                String regionBlock = regionBlock(user, item);
+                if (regionBlock != null) throw new IllegalArgumentException(regionBlock);
                 // 24.11.2026 (владелец): частоты кейсов и скинов нет, но игрок, не принявший обмен вовремя, 30 дней без них - его пропуск бьёт по аккаунту маркетплейса
                 LocalDateTime since = LocalDateTime.now().minusDays(30);
                 String marker = Cs2CaseAutoIssueService.NOT_ACCEPTED_MARKER + "%";

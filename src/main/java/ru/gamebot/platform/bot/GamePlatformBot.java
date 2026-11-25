@@ -15572,6 +15572,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendStarsWithdrawalClosed(user);
             return;
         }
+        String regionBlock = shopLimitService.regionBlock(user, reward);
+        if (regionBlock != null) { // кейсы, скины и капсулы: регион закрыт (25.11.2026) - говорим сразу, до запроса Trade URL
+            answerSilently(callbackQuery.getId());
+            sendText(user.getTelegramId(), regionBlock, backMenuKeyboard("shop:cs2"));
+            return;
+        }
         if (!"Вывод".equals(reward.getCategory()) && !"avatar_frame".equals(reward.getPurchaseGroup())
                 && showShopRequirementsIfBlocked(user, "shop:view:" + rewardId, false)) {
             answerSilently(callbackQuery.getId());
