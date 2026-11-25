@@ -15491,7 +15491,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // не напрямую из Магазина наград — "Назад" должен вести обратно в пикер (2026-09-20).
         String backTarget = ("Кастомизация".equals(reward.getCategory()) || "telegram_stars".equals(reward.getPurchaseGroup())) && reward.getPurchaseGroup() != null
                 ? "shop:group:" + reward.getPurchaseGroup()
-                : isDonateShopItem(reward) ? "shop:games" : "menu:shop";
+                : isDonateShopItem(reward) ? "shop:games" : rewardBackTarget(reward, "menu:shop");
         InlineKeyboardMarkup keyboard = verticalWithBackMenu(
                 List.of(keyboardFactory.callback("🛒 Обменять", "shop:buy:" + rewardId)),
                 "⬅️ Назад",
@@ -15527,7 +15527,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (data != null && !data.isBlank()) {
             rows.add(List.of(keyboardFactory.callback("✏️ Изменить данные", "shop:buyother:" + reward.getId())));
         }
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:view:" + reward.getId())));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", rewardBackTarget(reward, "shop:view:" + reward.getId()))));
         sendText(user.getTelegramId(),
                 "📝 <b>Проверьте заявку</b>\n\n"
                         + "🎁 " + escape(reward.getTitle()) + "\n"
@@ -15554,6 +15554,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Просит игрока ввести данные для выдачи (email/ID) и ждёт текст (SHOP_GAME_DATA_INPUT). */
+    /** Куда ведёт «Назад» с экранов покупки: кейсы/капсулы и скины возвращают в свою карусель, остальное - на переданный экран (25.11.2026). */
+    private String rewardBackTarget(RewardItem reward, String fallback) {
+        String g = reward == null ? null : reward.getPurchaseGroup();
+        if (ru.gamebot.platform.service.Cs2SkinCatalog.GROUP.equals(g)) return "skin:menu";
+        if (ru.gamebot.platform.service.Cs2CaseCatalog.GROUP.equals(g) || ru.gamebot.platform.service.Cs2CapsuleCatalog.GROUP.equals(g)) return "case:menu";
+        return fallback;
+    }
+
     private void askRewardUserData(CallbackQuery callbackQuery, AppUser user, RewardItem reward) {
         UserSession session = sessionService.get(user.getTelegramId());
         session.reset();
@@ -15611,7 +15619,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         keyboardFactory.rowsLayout(List.of(
                                 List.of(keyboardFactory.callback("✅ Да, выдать на эти данные", "shop:buyto:" + rewardId)),
                                 List.of(keyboardFactory.callback("✏️ Указать другие", "shop:buyother:" + rewardId)),
-                                List.of(keyboardFactory.callback("⬅️ Назад", "shop:view:" + rewardId)))));
+                                List.of(keyboardFactory.callback("⬅️ Назад", rewardBackTarget(reward, "shop:view:" + rewardId))))));
                 answerSilently(callbackQuery.getId());
                 return;
             }
