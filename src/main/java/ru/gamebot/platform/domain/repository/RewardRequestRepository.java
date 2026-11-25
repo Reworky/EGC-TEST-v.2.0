@@ -91,6 +91,10 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
     @Query("SELECT COUNT(r) FROM RewardRequest r WHERE r.user = :user AND r.rewardItem.purchaseGroup = :group AND r.status = 'REJECTED' AND r.adminComment LIKE :marker AND r.createdAt >= :since")
     long countRejectedWithMarkerSince(@Param("user") AppUser user, @Param("group") String group, @Param("marker") String marker, @Param("since") LocalDateTime since);
 
+    /** Выданные (APPROVED) заявки игрока по группе с даты, по которым он ещё не оставил отзыв: жёсткий замок на следующий скин (25.11.2026). Новые первыми. */
+    @Query("SELECT r FROM RewardRequest r JOIN FETCH r.rewardItem WHERE r.user = :user AND r.rewardItem.purchaseGroup = :group AND r.status = 'APPROVED' AND r.paidAt >= :since AND NOT EXISTS (SELECT b.id FROM BotReview b WHERE b.rewardRequestId = r.id) ORDER BY r.paidAt DESC")
+    List<RewardRequest> findIssuedWithoutReview(@Param("user") AppUser user, @Param("group") String group, @Param("since") LocalDateTime since);
+
     /** id выданных заявок группы, закрытых начиная с даты (наблюдение за отменой обмена продавцом в течение 7 дней). */
     @Query("SELECT r.id FROM RewardRequest r WHERE r.rewardItem.purchaseGroup = :group AND r.status = 'APPROVED' AND r.paidAt >= :since ORDER BY r.paidAt")
     List<Long> findApprovedIdsSince(@Param("group") String group, @Param("since") LocalDateTime since);

@@ -70,6 +70,8 @@ public class Cs2CaseAutoIssueService {
     private static final double MAX_MARKUP = 1.35;
     private static final double MAX_MARKUP_SKIN = 1.20;
     private static final int MAX_POLL_PER_CYCLE = 20;
+    /** Награда игроку за одобренный отзыв о скине (EXC), решение владельца 25.11.2026. */
+    public static final long REVIEW_REWARD_EXC = 100;
     /** Запас после срока приёма обмена (receive_until), чтобы маркетплейс успел пометить непринятый обмен отменённым. */
     private static final long RECEIVE_BUFFER_SEC = 120;
 
@@ -299,6 +301,14 @@ public class Cs2CaseAutoIssueService {
                 + "👤 " + escape(s.nick()) + " (" + s.telegramId() + ")\n"
                 + "🪙 Списано: " + fmtExc(s.paidExc()) + " EXC" + (paidRub > 0 ? " · закупка на маркетплейсе: " + paidRub + " ₽" : "")
                 + "\n🔎 Признак: срок приёма обмена прошёл, отмены нет (stage " + stage + ")";
+        if (Cs2SkinCatalog.GROUP.equals(s.group())) {
+            // скин: игроку - картинка скина с просьбой оценить покупку (жёсткий замок на следующий скин, +100 EXC после проверки отзыва), админам - как обычно
+            String image = skinCatalog.all().stream().filter(k -> k.title().equals(s.title())).map(Cs2SkinCatalog.SkinDef::imageResource).findFirst().orElse(null);
+            String caption = player + "\n\n⭐ <b>Оцените покупку, это 10 секунд.</b> Отзыв появится в нашем канале после проверки, и вы получите <b>+" + REVIEW_REWARD_EXC + " EXC</b>.";
+            bot.skinIssuedReviewPrompt(s.telegramId(), s.id(), caption, image);
+            bot.caseAutoNotify(null, null, admin);
+            return;
+        }
         bot.caseAutoNotify(s.telegramId(), player, admin);
     }
 

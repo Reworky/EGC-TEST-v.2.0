@@ -15584,6 +15584,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(), regionBlock, backMenuKeyboard("shop:cs2"));
             return;
         }
+        if (ru.gamebot.platform.service.Cs2SkinCatalog.GROUP.equals(reward.getPurchaseGroup())) {
+            // жёсткий замок (25.11.2026, владелец): пока нет отзыва о прошлом выданном скине, следующий не купить; считаем покупки с даты запуска замка
+            List<RewardRequest> unreviewed = rewardRequestRepository.findIssuedWithoutReview(user,
+                    ru.gamebot.platform.service.Cs2SkinCatalog.GROUP, LocalDateTime.of(2026, 11, 25, 0, 0));
+            if (!unreviewed.isEmpty()) {
+                answerSilently(callbackQuery.getId());
+                sendSkinReviewGate(user, unreviewed.get(0));
+                return;
+            }
+        }
         if (!"Вывод".equals(reward.getCategory()) && !"avatar_frame".equals(reward.getPurchaseGroup())
                 && showShopRequirementsIfBlocked(user, "shop:view:" + rewardId, false)) {
             answerSilently(callbackQuery.getId());
@@ -21347,6 +21357,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("✅ Готово", "review:finish")))));
             return;
         }
+        // Отзыв о купленном скине (25.11.2026): тот же флоу, но с подсказкой про скриншот скина и пометкой для награды +100 EXC
+        if (action.startsWith("sstars:")) {
+            String[] parts = action.substring("sstars:".length()).split(":");
+            long reqId = Long.parseLong(parts[0]);
+            int stars = Integer.parseInt(parts[1]);
+            session.reset();
+            session.getData().put("reviewReqId", String.valueOf(reqId));
+            session.getData().put("reviewStars", String.valueOf(stars));
+            session.getData().put("reviewSkin", "1");
+            session.setState(SessionState.WITHDRAWAL_REVIEW_TEXT);
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "Спасибо!");
+            sendText(user.getTelegramId(),
+                    "Спасибо за оценку! Добавьте пару слов и/или <b>скриншот скина в инвентаре</b>, затем нажмите «Готово».",
+                    keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("✅ Готово", "review:finish")))));
+            return;
+        }
         // Отзыв без привязки к выводу — вход по ссылке "?start=review" (см. handleStart), для поста
         // в канале, а не только для тех, кто уже вывел EXC (см. promptGeneralReview). Тот же флоу
         // дальше (текст/фото/"Готово"), reqId просто не заполняется в session.
@@ -21398,9 +21425,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         review.setStatus(ru.gamebot.platform.domain.enums.BotReviewStatus.PENDING);
         review.setCreatedAt(LocalDateTime.now());
         review = botReviewRepository.save(review);
+        boolean skinReview = "1".equals(session.getData().get("reviewSkin"));
         session.reset();
-        sendText(user.getTelegramId(), "🙏 Спасибо за отзыв! Он появится в канале после проверки модератором.",
-                backMenuKeyboard("menu:main"));
+        sendText(user.getTelegramId(), skinReview
+                        ? "🙏 Спасибо за отзыв! Он появится в канале после проверки модератором, и мы начислим <b>+" + ru.gamebot.platform.service.Cs2CaseAutoIssueService.REVIEW_REWARD_EXC + " EXC</b>. Следующий скин теперь доступен."
+                        : "🙏 Спасибо за отзыв! Он появится в канале после проверки модератором.",
+                backMenuKeyboard(skinReview ? "skin:menu" : "menu:main"));
         sendReviewModerationCard(review);
     }
 
@@ -21443,6 +21473,65 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Клавиатура оценки отзыва о купленном скине (review:sstars:<заявка>:<звёзды>), без «Не сейчас»: жёсткий замок на следующий скин (25.11.2026). */
+    private InlineKeyboardMarkup skinReviewStarsKeyboard(long requestId, boolean withBack) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(
+                keyboardFactory.callback("⭐️⭐️⭐️⭐️⭐️", "review:sstars:" + requestId + ":5"),
+                keyboardFactory.callback("⭐️⭐️⭐️⭐️", "review:sstars:" + requestId + ":4")));
+        rows.add(List.of(
+                keyboardFactory.callback("⭐️⭐️⭐️", "review:sstars:" + requestId + ":3"),
+                keyboardFactory.callback("⭐️⭐️", "review:sstars:" + requestId + ":2"),
+                keyboardFactory.callback("⭐️", "review:sstars:" + requestId + ":1")));
+        if (withBack) rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "skin:menu")));
+        return keyboardFactory.rowsLayout(rows);
+    }
+
+    /** Выдан скин: игроку картинка скина, подпись и оценка покупки (вызывает автовыдача, Cs2CaseAutoIssueService). */
+    public void skinIssuedReviewPrompt(Long telegramId, Long requestId, String caption, String imageResource) {
+        InlineKeyboardMarkup keyboard = skinReviewStarsKeyboard(requestId, false);
+        try {
+            if (imageResource != null && getClass().getResource("/" + imageResource) != null) {
+                sendResourceBanner(telegramId, imageResource, caption, keyboard);
+            } else {
+                sendText(telegramId, caption, keyboard);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to send skin review prompt to user {}", telegramId, e);
+        }
+    }
+
+    /** Замок: пока по прошлому выданному скину нет отзыва, следующий скин не купить; здесь та же оценка. */
+    private void sendSkinReviewGate(AppUser user, RewardRequest lastIssued) {
+        String title = lastIssued.getRewardItem().getTitle();
+        String image = cs2SkinCatalog.all().stream().filter(k -> k.title().equals(title)).map(ru.gamebot.platform.service.Cs2SkinCatalog.SkinDef::imageResource).findFirst().orElse(null);
+        String text = "⭐ <b>Сначала отзыв о прошлой покупке</b>\n\nЧтобы купить следующий скин, оцените прошлый (заявка <b>М-" + reqDisplayId(lastIssued) + "</b>): это 10 секунд, и после проверки вы получите <b>+"
+                + ru.gamebot.platform.service.Cs2CaseAutoIssueService.REVIEW_REWARD_EXC + " EXC</b>.";
+        InlineKeyboardMarkup keyboard = skinReviewStarsKeyboard(lastIssued.getId(), true);
+        if (image != null && getClass().getResource("/" + image) != null) {
+            sendResourceBanner(user.getTelegramId(), image, text, keyboard);
+        } else {
+            sendText(user.getTelegramId(), text, keyboard);
+        }
+    }
+
+    /** +100 EXC за одобренный модератором отзыв о скине (один раз на отзыв). Платёжный код: любой сбой - алерт админам, отметка ставится ДО начисления, чтобы не начислить дважды. */
+    private void grantSkinReviewReward(BotReview review) {
+        try {
+            if (review.getRewardRequestId() == null || Boolean.TRUE.equals(review.getRewardGranted())) return;
+            RewardRequest req = rewardService.getRequest(review.getRewardRequestId());
+            if (!ru.gamebot.platform.service.Cs2SkinCatalog.GROUP.equals(req.getRewardItem().getPurchaseGroup())) return;
+            review.setRewardGranted(true);
+            botReviewRepository.save(review);
+            excTransactionService.creditExc(review.getUser(), ru.gamebot.platform.service.Cs2CaseAutoIssueService.REVIEW_REWARD_EXC,
+                    ru.gamebot.platform.service.ExcTransactionService.BONUS, "Бонус за отзыв о скине");
+            sendText(review.getUser().getTelegramId(), "🎁 <b>Отзыв опубликован</b>\n\n+" + ru.gamebot.platform.service.Cs2CaseAutoIssueService.REVIEW_REWARD_EXC + " EXC начислены. Спасибо!", null);
+        } catch (Exception e) {
+            log.error("Failed to grant skin review reward for review {}", review.getId(), e);
+            caseAutoNotify(null, null, "⚠️ Не удалось начислить +" + ru.gamebot.platform.service.Cs2CaseAutoIssueService.REVIEW_REWARD_EXC + " EXC за отзыв о скине #" + review.getId() + ": " + escape(String.valueOf(e.getMessage())) + ". Начислите вручную.");
+        }
+    }
+
     private void handleReviewModAction(CallbackQuery callbackQuery, String action) {
         if (action.startsWith("approve:")) {
             long id = parseLong(action.substring("approve:".length()));
@@ -21451,6 +21540,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 review.setStatus(ru.gamebot.platform.domain.enums.BotReviewStatus.PUBLISHED);
                 botReviewRepository.save(review);
                 publishReviewToChannel(review);
+                grantSkinReviewReward(review);
             });
             clearInlineKeyboard(callbackQuery);
             answer(callbackQuery.getId(), "✅ Опубликовано");
@@ -21705,6 +21795,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append("Отзыв с бота 🤖\n");
         sb.append("Игрок: <b><a href=\"").append(profileLink).append("\">").append(nickname).append("</a></b>\n");
         sb.append(stars);
+        // Отзыв о скине (25.11.2026): название скина в подписи; если игрок не приложил свой скриншот - картинка скина из каталога
+        String skinImage = null;
+        if (review.getRewardRequestId() != null) {
+            try {
+                String reqTitle = rewardService.getRequest(review.getRewardRequestId()).getRewardItem().getTitle();
+                for (ru.gamebot.platform.service.Cs2SkinCatalog.SkinDef k : cs2SkinCatalog.all()) {
+                    if (k.title().equals(reqTitle)) {
+                        sb.append("\n🔫 <b>").append(escape(k.name())).append("</b> (").append(escape(k.wearRu())).append(")");
+                        skinImage = k.imageResource();
+                        break;
+                    }
+                }
+            } catch (Exception ignored) {
+                // отзыв без привязанной заявки или заявка не найдена - публикуем без строки о скине
+            }
+        }
         String reviewText = review.getText();
         if (reviewText != null && !reviewText.isBlank()) {
             sb.append("\n\n\"").append(escape(reviewText)).append("\"");
@@ -21714,6 +21820,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         InlineKeyboardMarkup reviewKeyboard = startEarningKeyboard();
         try {
             org.telegram.telegrambots.meta.api.objects.Message sent;
+            java.io.InputStream skinStream = review.getPhotoFileId() == null && skinImage != null ? getClass().getResourceAsStream("/" + skinImage) : null;
             if (review.getPhotoFileId() != null) {
                 SendPhoto photo = new SendPhoto();
                 photo.setChatId(channel);
@@ -21722,6 +21829,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 photo.setParseMode("HTML");
                 if (reviewKeyboard != null) photo.setReplyMarkup(reviewKeyboard);
                 sent = execute(photo);
+            } else if (skinStream != null) {
+                try (java.io.InputStream in = skinStream) {
+                    SendPhoto photo = new SendPhoto();
+                    photo.setChatId(channel);
+                    photo.setPhoto(new InputFile(in, skinImage));
+                    photo.setCaption(text);
+                    photo.setParseMode("HTML");
+                    if (reviewKeyboard != null) photo.setReplyMarkup(reviewKeyboard);
+                    sent = execute(photo);
+                }
             } else {
                 SendMessage msg = new SendMessage();
                 msg.setChatId(channel);

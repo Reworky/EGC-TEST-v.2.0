@@ -49,6 +49,9 @@ public class BotReview {
 
     private LocalDateTime createdAt;
 
+    /** Награда за отзыв о скине (+100 EXC) уже выдана после одобрения модератором (25.11.2026); null - нет. */
+    private Boolean rewardGranted;
+
     /** ID сообщения в @egc_payouts после публикации отзыва. */
     private Integer publishedMessageId;
 
