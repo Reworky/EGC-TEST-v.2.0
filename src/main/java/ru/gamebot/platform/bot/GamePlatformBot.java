@@ -15224,9 +15224,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.callback((idx + 1) + " / " + n, "noop"),
                     keyboardFactory.callback("▶️", "skin:v:" + typeKey + ":" + (idx + 1))));
         }
-        rows.add(List.of(item != null
+        rows.add(List.of(item != null && !shopLimitService.skinsPaused()
                 ? keyboardFactory.callback("🛒 Обменять", "shop:buy:" + item.getId())
-                : keyboardFactory.callback("🔒 Обмен скоро откроется", "noop")));
+                : keyboardFactory.callback("🔒 Скоро откроется", "noop")));
         rows.add(List.of(
                 keyboardFactory.callback("⬅️ Назад", "skin:menu"),
                 keyboardFactory.callback("🏠 Меню", "menu:main")));
@@ -15570,6 +15570,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if ("telegram_stars".equals(reward.getPurchaseGroup()) && !isStarsWithdrawalOpen()) {
             answerSilently(callbackQuery.getId());
             sendStarsWithdrawalClosed(user);
+            return;
+        }
+        String pauseBlock = shopLimitService.pauseBlock(reward); // скины на техработах (25.11.2026): говорим сразу
+        if (pauseBlock != null) {
+            answerSilently(callbackQuery.getId());
+            sendText(user.getTelegramId(), pauseBlock, backMenuKeyboard("skin:menu"));
             return;
         }
         String regionBlock = shopLimitService.regionBlock(user, reward);

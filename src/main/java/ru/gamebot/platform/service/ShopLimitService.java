@@ -61,6 +61,25 @@ public class ShopLimitService {
         return null;
     }
 
+    /** Выключатель выдачи скинов в app_settings: «cs2.skins.paused». По умолчанию (записи нет) выдача ЗАКРЫТА (техработы, владелец 25.11.2026);
+     *  открыть: значение 0/false (scripts/cs2-skins-open.sql), закрыть снова: scripts/cs2-skins-close.sql. Применяется сразу, без перезапуска. */
+    public static final String SKINS_PAUSED_KEY = "cs2.skins.paused";
+
+    public boolean skinsPaused() {
+        return appSettingRepository.findById(SKINS_PAUSED_KEY)
+                .map(ru.gamebot.platform.domain.model.AppSetting::getValue)
+                .map(v -> !("0".equals(v.trim()) || "false".equalsIgnoreCase(v.trim())))
+                .orElse(true);
+    }
+
+    /** Отказ, если выдача этого товара сейчас закрыта на техработы (пока только скины); null - можно. Начатые заявки не затрагиваются. */
+    public String pauseBlock(RewardItem item) {
+        if (item != null && Cs2SkinCatalog.GROUP.equals(item.getPurchaseGroup()) && skinsPaused()) {
+            return "🛠 Скины временно недоступны: небольшие технические работы. Скоро откроем, загляните позже.";
+        }
+        return null;
+    }
+
     /** Игрок из Украины: страна в профиле («Украина», «Україна», «ua»...) или код номера +380. */
     public boolean isUkrainian(AppUser user) {
         if ("Украина".equals(CountryNormalizer.canonical(user.getCountry()))) return true;
@@ -100,6 +119,7 @@ public class ShopLimitService {
     }
 
     private final RewardRequestRepository rewardRequestRepository;
+    private final ru.gamebot.platform.domain.repository.AppSettingRepository appSettingRepository;
     private final AppUserRepository appUserRepository;
     private final UserService userService;
     private final SinkShopService sinkShopService;
@@ -177,6 +197,8 @@ public class ShopLimitService {
                 }
             }
             case "cs2_case", "cs2_skin", "cs2_capsule" -> {
+                String pauseBlock = pauseBlock(item);
+                if (pauseBlock != null) throw new IllegalArgumentException(pauseBlock);
                 String regionBlock = regionBlock(user, item);
                 if (regionBlock != null) throw new IllegalArgumentException(regionBlock);
                 // 24.11.2026 (владелец): частоты кейсов и скинов нет, но игрок, не принявший обмен вовремя, 30 дней без них - его пропуск бьёт по аккаунту маркетплейса
