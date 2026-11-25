@@ -227,6 +227,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.domain.repository.ShopRubleOrderRepository shopRubleOrderRepository;
     private final ru.gamebot.platform.domain.repository.TournamentEntryRepository tournamentEntryRepository;
     private final ru.gamebot.platform.domain.repository.BotReviewRepository botReviewRepository;
+    private final ru.gamebot.platform.domain.repository.RewardRequestRepository rewardRequestRepository;
     private final ru.gamebot.platform.domain.repository.RegistrationNoticeRepository registrationNoticeRepository;
     private final ru.gamebot.platform.domain.repository.AutoApprovalNoticeRepository autoApprovalNoticeRepository;
     private final ru.gamebot.platform.domain.repository.NudgeFeedbackRepository nudgeFeedbackRepository;
