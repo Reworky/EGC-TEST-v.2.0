@@ -15175,7 +15175,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.callback((idx + 1) + " / " + n, "noop"),
                     keyboardFactory.callback("▶️", "cap:v:all:" + (idx + 1))));
         }
-        rows.add(List.of(item != null
+        rows.add(List.of(item != null && !shopLimitService.isPaused(item)
                 ? keyboardFactory.callback("🛒 Обменять", "shop:buy:" + item.getId())
                 : keyboardFactory.callback("🔒 Обмен скоро откроется", "noop")));
         rows.add(List.of(
@@ -15225,7 +15225,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.callback((idx + 1) + " / " + n, "noop"),
                     keyboardFactory.callback("▶️", "skin:v:" + typeKey + ":" + (idx + 1))));
         }
-        rows.add(List.of(item != null && !shopLimitService.skinsPaused()
+        rows.add(List.of(item != null && !shopLimitService.isPaused(item)
                 ? keyboardFactory.callback("🛒 Обменять", "shop:buy:" + item.getId())
                 : keyboardFactory.callback("🔒 Скоро откроется", "noop")));
         rows.add(List.of(
@@ -15436,7 +15436,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.callback("⏪ −10", "case:v:all:" + (idx - 10)),
                     keyboardFactory.callback("+10 ⏩", "case:v:all:" + (idx + 10))));
         }
-        rows.add(List.of(item != null
+        rows.add(List.of(item != null && !shopLimitService.isPaused(item)
                 ? keyboardFactory.callback("🛒 Обменять", "shop:buy:" + item.getId())
                 : keyboardFactory.callback("🔒 Обмен скоро откроется", "noop")));
         rows.add(List.of(
@@ -15576,7 +15576,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String pauseBlock = shopLimitService.pauseBlock(reward); // скины на техработах (25.11.2026): говорим сразу
         if (pauseBlock != null) {
             answerSilently(callbackQuery.getId());
-            sendText(user.getTelegramId(), pauseBlock, backMenuKeyboard("skin:menu"));
+            sendText(user.getTelegramId(), pauseBlock, backMenuKeyboard(ru.gamebot.platform.service.Cs2SkinCatalog.GROUP.equals(reward.getPurchaseGroup()) ? "skin:menu" : "menu:shop"));
             return;
         }
         String regionBlock = shopLimitService.regionBlock(user, reward);

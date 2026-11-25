@@ -72,12 +72,32 @@ public class ShopLimitService {
                 .orElse(true);
     }
 
-    /** Отказ, если выдача этого товара сейчас закрыта на техработы (пока только скины); null - можно. Начатые заявки не затрагиваются. */
+    /** Выключатель выдачи кейсов и капсул в app_settings: «cs2.cases.paused». По умолчанию (записи нет) выдача ОТКРЫТА; закрыть: значение 1
+     *  (scripts/cs2-all-close.sql), открыть: scripts/cs2-all-open.sql. Применяется сразу, без перезапуска (владелец 25.11.2026). */
+    public static final String CASES_PAUSED_KEY = "cs2.cases.paused";
+
+    public boolean casesPaused() {
+        return appSettingRepository.findById(CASES_PAUSED_KEY)
+                .map(ru.gamebot.platform.domain.model.AppSetting::getValue)
+                .map(v -> !("0".equals(v.trim()) || "false".equalsIgnoreCase(v.trim())))
+                .orElse(false);
+    }
+
+    /** Закрыта ли выдача этого товара (скины или кейсы/капсулы) на техработы. */
+    public boolean isPaused(RewardItem item) {
+        if (item == null) return false;
+        String g = item.getPurchaseGroup();
+        if (Cs2SkinCatalog.GROUP.equals(g)) return skinsPaused();
+        if (Cs2CaseCatalog.GROUP.equals(g) || Cs2CapsuleCatalog.GROUP.equals(g)) return casesPaused();
+        return false;
+    }
+
+    /** Отказ, если выдача этого товара сейчас закрыта на техработы (скины, кейсы, капсулы); null - можно. Начатые заявки не затрагиваются. */
     public String pauseBlock(RewardItem item) {
-        if (item != null && Cs2SkinCatalog.GROUP.equals(item.getPurchaseGroup()) && skinsPaused()) {
-            return "🛠 Скины временно недоступны: небольшие технические работы. Скоро откроем, загляните позже.";
-        }
-        return null;
+        if (!isPaused(item)) return null;
+        return Cs2SkinCatalog.GROUP.equals(item.getPurchaseGroup())
+                ? "🛠 Скины временно недоступны: небольшие технические работы. Скоро откроем, загляните позже."
+                : "🛠 Кейсы и капсулы временно недоступны: небольшие технические работы. Скоро откроем, загляните позже.";
     }
 
     /** Игрок из Украины: страна в профиле («Украина», «Україна», «ua»...) или код номера +380. */
