@@ -2339,6 +2339,7 @@ public class QuestSeeder implements CommandLineRunner {
         enableGameOfferOnce(RODINA_TITLE, "Родина РП", "quest.enable.rodina.v1");
         enableGameOfferOnce(SACRALIUM_TITLE, "Sacralium", "quest.enable.sacralium.v1");
         enableGameOfferOnce(JADE_TITLE, "Нефритовое Царство", "quest.enable.jade.v1");
+        enableGameOfferOnce(DRAGONEGG_TITLE, "Яйцо Дракона", "quest.enable.dragonegg.v1");   // с 26.11.2026 новые игровые квесты включаются сразу (решение владельца)
 
         // Партнёрские (внешние) квесты бессрочные (решение владельца 18.11.2026): срок задаёт Quest.getDurationDays() (0 у всех externalAutoApprove),
         // здесь один раз снимаем дедлайны с уже взятых заявок, иначе они бы отменились старым сроком (WeeklyResetScheduler.cancelExpiredSubmissions)
