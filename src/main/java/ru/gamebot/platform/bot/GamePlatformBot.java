@@ -9097,7 +9097,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("excash", "ID [±сумма] [уведомить] [причина]", "Спонсорский баланс EXCASH: без суммы - показать игровой и спонсорский баланс игрока; +сумма - начислить EXCASH, -сумма - списать (ниже нуля нельзя); слово «уведомить» отправляет игроку сообщение о начислении"),
             new AdminCommand("ugcpilot", "status|start|stop", "Пилот «UGC в EXCASH»: от 500 просмотров платим EXCASH с удержанием 3 дня, бюджет 300 000 EXCASH (3 000 ₽), граница 100 000 EXCASH в сутки на игрока, срок 14 дней; status - расход и остаток, start - запустить, stop - остановить"),
             new AdminCommand("tocash", "ID сумма", "Перенести EXC с игрового баланса на спонсорский (EXCASH) 1 к 1, для игроков, которые просят перенести старые спонсорские заработки. Одна транзакция, оба баланса показываются в ответе"),
-            new AdminCommand("wowpay", "ID [rodina]", "Награда за игровой квест (по умолчанию World of Warships, с «rodina» - Родина РП): игрок есть в списке конверсий лендинга (партнёр подтвердил игру). Начисляет награду квеста и уведомляет игрока; повторно тому же игроку не начисляет"),
+            new AdminCommand("wowpay", "ID [rodina|sacralium]", "Награда за игровой квест (по умолчанию World of Warships, с «rodina» - Родина РП): игрок есть в списке конверсий лендинга (партнёр подтвердил игру). Начисляет награду квеста и уведомляет игрока; повторно тому же игроку не начисляет"),
             new AdminCommand("psbbonus", "ID [скин|вручную|повтор|отказ]", "Квест ПСБ (скин AK-47 | Searing Rage): обычно не нужна, скин запрашивается сам после постбека LeadGid. Без слов - открыть игроку скин (вы сами проверили выплату). «вручную» - скин купили вы: отметить выплату и начислить компенсацию, «отказ» - банк не подтвердил"),
             new AdminCommand("ubrrbonus", "ID [скин|вручную|повтор|отказ]", "Квест УБРиР (скин AWP | Green Energy): обычно не нужна, скин запрашивается сам после постбека LeadGid. Без слов - открыть игроку скин (вы сами проверили выплату). «вручную» - скин купили вы: отметить выплату и начислить компенсацию, «отказ» - банк не подтвердил"),
             new AdminCommand("sovcombonus", "ID [повтор|карта|отказ]", "Выплата Совкомбанк (кредитная карта 180 дней без %) после подтверждения банка: начисляет игроку 💎 150 000 EXCASH (≈ 1500 ₽, награда клуба; плюс компенсация траты, если она есть), переводить деньги не нужно. Слово «карта» - прежний ручной перевод рублями без EXCASH, «отказ» - банк не подтвердил карту (игроку уйдёт сообщение, ожидание снимется), «повтор» - повторная выплата"),
@@ -11106,7 +11106,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Игровой оффер ActionPay (World of Warships, оффер 14951): своя карточка по макету владельца 18.11.2026 - баннер, суть, шаги, метка «Реклама», ссылка кнопкой. */
     private static final String GAME_OFFER_ID = "wows";
     /** Игровые офферы через лендинг: wows (ActionPay) и rodina (Admitad, 24.11.2026). */
-    private static final java.util.Set<String> GAME_OFFER_IDS = java.util.Set.of("wows", "rodina");
+    private static final java.util.Set<String> GAME_OFFER_IDS = java.util.Set.of("wows", "rodina", "sacralium");
 
     /** Квест ведёт на страницу-лендинг партнёра; постбеков и ключей сети в боте нет: награду начисляет админ командой /wowpay ID по списку конверсий лендинга. */
     private boolean isGameOfferQuest(Quest quest) {
@@ -11129,7 +11129,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append("🎯 <b>").append(escape(quest.getTitle())).append("</b>\n");
         sb.append(questMetaLine(quest)).append("\n");
         sb.append(activeDeadline.contains("с момента старта") ? "" : activeDeadline).append(statusLine);
-        if (sponsorBalanceService.applies(quest)) {
+        if ("sacralium".equals(quest.getExternalOfferId())) {
+            // Два этапа: сначала рубли (правило владельца), токены называются при начислении
+            long stage1Rub = ru.gamebot.platform.service.GameStageRewardService.SACRALIUM_STAGE1_EXC / 100;
+            long stage2Rub = Math.round(coins / 100.0);
+            sb.append("\n💰 <b>До ").append(fmtExc(stage1Rub + stage2Rub)).append(" ₽</b>: ").append(fmtExc(stage1Rub)).append(" ₽ за первый этап и ")
+                    .append(fmtExc(stage2Rub)).append(" ₽ за второй\n");
+        } else if (sponsorBalanceService.applies(quest)) {
             sb.append("\n💎 <b>+").append(fmtExc(coins)).append(" EXCASH</b> (≈ ").append(fmtExc(Math.round(coins / 100.0))).append(" ₽)\n");
         } else {
             sb.append("\n🏆 <b>+").append(fmtExc(coins)).append(" EXC</b>").append(starsNote(coins)).append("\n");
@@ -11221,7 +11227,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String[] p = text.split("\\s+");
             Long targetId = p.length > 1 ? parseLong(p[1]) : null;
             if (targetId == null) {
-                sendText(admin.getTelegramId(), "⚠️ Формат: <code>/wowpay ID</code> (World of Warships) или <code>/wowpay ID rodina</code> (Родина РП), где ID - Telegram ID игрока из списка конверсий лендинга.", null);
+                sendText(admin.getTelegramId(), "⚠️ Формат: <code>/wowpay ID</code> (World of Warships), <code>/wowpay ID rodina</code> (Родина РП) или <code>/wowpay ID sacralium</code> (Sacralium, второй этап), где ID - Telegram ID игрока из списка конверсий лендинга.", null);
                 return;
             }
             String offerKey = p.length > 2 ? p[2].toLowerCase(java.util.Locale.ROOT) : GAME_OFFER_ID;
@@ -11260,6 +11266,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (isGameOfferQuest(quest) && GAME_OFFER_ID.equals(quest.getExternalOfferId()) && getClass().getResource("/wows_quest_banner.jpg") != null) return "wows_quest_banner.jpg";
         if (isGameOfferQuest(quest) && "rodina".equals(quest.getExternalOfferId()) && getClass().getResource("/rodina_quest_banner.jpg") != null) return "rodina_quest_banner.jpg";
+        if (isGameOfferQuest(quest) && "sacralium".equals(quest.getExternalOfferId()) && getClass().getResource("/sacralium_quest_banner.jpg") != null) return "sacralium_quest_banner.jpg";
         ru.gamebot.platform.service.PartnerMission bannerPm = ru.gamebot.platform.service.PartnerMissions.forQuest(quest);
         return bannerPm != null && bannerPm.bannerResource() != null && getClass().getResource("/" + bannerPm.bannerResource()) != null ? bannerPm.bannerResource() : null;
     }

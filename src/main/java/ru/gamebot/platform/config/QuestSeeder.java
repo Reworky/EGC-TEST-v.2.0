@@ -2218,6 +2218,46 @@ public class QuestSeeder implements CommandLineRunner {
                     rodinaCreated ? "Created" : "Updated", RODINA_REWARD_EXC);
         }
 
+        // ── Игровой оффер: Sacralium (Admitad, страница-лендинг), 26.11.2026 ─────────
+        // Решение владельца: регистрация без награды, две цели. Этап 1 «Активный игрок» - 700 EXCASH (GameStageRewardService), этап 2 «Активный игрок 2» - награда квеста
+        // 10 000 EXCASH (≈30% нижней выплаты 327,90 ₽). Постбек принимает лендинг. ВНИМАНИЕ: правила программы - только немотивированный трафик; запуск на риск владельца.
+        // Создаётся НЕАКТИВНЫМ («Управление квестами → Включить»).
+        gameCatalogService.setDifficultyMode("Sacralium", "FLAT", SACRALIUM_REWARD_EXC, 0);
+        if (appSettingRepository.findById(SACRALIUM_CARD_KEY).isEmpty()) {
+            Quest sq = questRepository.findFirstByTitleAndGameName(SACRALIUM_TITLE, "Sacralium").orElse(null);
+            if (sq == null) {
+                sq = new Quest();
+                sq.setGameName("Sacralium");
+                sq.setTitle(SACRALIUM_TITLE);
+                sq.setParticipantLimit(1000);
+                sq.setActive(false);
+                sq.setCreatedAt(LocalDateTime.now());
+            }
+            sq.setPlatform("ПК · браузер");
+            sq.setDurationDays(0);
+            sq.setDurationText("Бессрочно");
+            sq.setRewardXp(0);
+            sq.setRewardCoins(SACRALIUM_REWARD_EXC);
+            sq.setDescription("Браузерная MMORPG в мрачном скандинавском фэнтези: PvP-бои, подземелья и боссы. Играть нужно с компьютера.");
+            sq.setInstruction("Открой страницу игры и зарегистрируйся:\n"
+                    + "https://igro-afisha.pages.dev/?tg={TG_ID}#sacralium\n\n"
+                    + "Играй с компьютера: 7 ₽ за первый этап и 100 ₽ за второй, когда партнёр их засчитает.");
+            sq.setRequirements("📎 Как получить\n"
+                    + "1. Нажми «Взять», открой страницу игры и зарегистрируйся (за регистрацию награды нет).\n"
+                    + "2. Играй с компьютера, пока партнёр не засчитает тебя активным игроком: 7 ₽.\n"
+                    + "3. Играй дальше до второго этапа, «Активный игрок 2»: ещё 100 ₽.\n\n"
+                    + "⏳ Партнёр подтверждает этапы в среднем до 40 дней. Рубли начислим в EXCASH, они выводятся без лимитов.\n"
+                    + "Реклама · erid: 2bL9aMPo2e49hMef4rqytJKLHd");
+            sq.setExternalAutoApprove(true);
+            sq.setExternalOfferId("sacralium");
+            sq.setExternalNetwork("landing");
+            sq.setExternalTargetType("REGISTRATION");
+            sq.setExternalMinPaymentRub(null);
+            questRepository.save(sq);
+            saveSetting(SACRALIUM_CARD_KEY);
+            log.info("[QuestSeeder] Game offer quest created: Sacralium (landing), stage 2 reward {} EXC", SACRALIUM_REWARD_EXC);
+        }
+
         // Партнёрские (внешние) квесты бессрочные (решение владельца 18.11.2026): срок задаёт Quest.getDurationDays() (0 у всех externalAutoApprove),
         // здесь один раз снимаем дедлайны с уже взятых заявок, иначе они бы отменились старым сроком (WeeklyResetScheduler.cancelExpiredSubmissions)
         if (appSettingRepository.findById(EXTERNAL_UNLIMITED_KEY).isEmpty()) {
@@ -3376,6 +3416,10 @@ public class QuestSeeder implements CommandLineRunner {
             log.warn("[QuestSeeder] Hiding T-Bank referral quest failed", e);
         }
     }
+
+    private static final String SACRALIUM_TITLE = "Sacralium: играй в новую MMORPG";
+    private static final long SACRALIUM_REWARD_EXC = 10_000L;
+    private static final String SACRALIUM_CARD_KEY = "sacralium.card.v1.done";
 
     private static final String PSB_OLD_TITLE = "Получи 500 ₽ на карту за бесплатную карту ПСБ 🎁";
 

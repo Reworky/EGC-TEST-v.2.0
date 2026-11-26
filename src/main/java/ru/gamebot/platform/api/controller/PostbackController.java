@@ -59,6 +59,8 @@ public class PostbackController {
     @Value("${app.landing-postback-token:}")
     private String landingToken;
 
+    private final ru.gamebot.platform.service.GameStageRewardService gameStageRewardService;
+
     private final ru.gamebot.platform.domain.repository.LeadgidConversionRepository leadgidConversionRepository;
     private final ru.gamebot.platform.domain.repository.QuestSubmissionRepository questSubmissionRepository;
     private final ru.gamebot.platform.service.NewbieFunnelService newbieFunnelService;
@@ -199,7 +201,15 @@ public class PostbackController {
             log.warn("[LandingOffer] Postback rejected: bad token");
             return ResponseEntity.status(403).body("forbidden");
         }
-        // subid = Telegram ID игрока, offer = ключ оффера квеста (rodina), id = ID действия в сети (для лога). Размер выплаты лендинг уже проверил.
+        // subid = Telegram ID игрока, offer = ключ оффера квеста (rodina, sacralium), id = ID действия в сети (для лога). Размер выплаты лендинг уже проверил.
+        if ("sacralium1".equals(params.get("offer"))) {   // промежуточный этап: начисление без закрытия квеста
+            try {
+                return ResponseEntity.ok(gameStageRewardService.paySacraliumStage1(params.get("subid")));
+            } catch (Exception e) {
+                log.error("[LandingOffer] sacralium stage 1 failed, subid={}", params.get("subid"), e);
+                return ResponseEntity.ok("error");
+            }
+        }
         return processConversion("landing", params.get("subid"), params.get("offer"), params.get("id"), null);
     }
 
