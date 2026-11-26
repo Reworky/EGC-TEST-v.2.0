@@ -10619,7 +10619,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             // 15.11.2026 (владелец): «Что ты получаешь» и «Как это работает» - раскрывающиеся цитаты. Заголовок «Как это работает:» из конца описания уходит в цитату с шагами ниже.
             desc = desc.replaceAll("(?s)\\n*Как это работает:[ \\t]*\\n*$", "");
             desc = collapseSponsorSections(desc);
-            desc = desc.replaceAll("(?m)(Уже есть такой\\? [^\\n<]*)", "<i>$1</i>");
+            desc = desc.replaceAll("\\n?Уже есть такой\\? [^\\n<]*", "");   // пометка о замене скина стоит отдельно, после шагов (макет владельца 26.11.2026)
             sb.append("\n").append(desc).append("\n");
         }
         List<String[]> steps = splitQuestBlocks(instruction);
@@ -10628,6 +10628,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             // Заголовки шагов 1️⃣-4️⃣; длинный общий четвёртый шаг на карточке сокращаем: подпись под баннером ограничена, иначе картинка уходит отдельно от текста
             for (String[] step : steps) stepLines.add(escape(step[0].replace(LONG_AUTO_STEP, SHORT_AUTO_STEP)));
             sb.append("\n<blockquote expandable><b>Как это работает:</b>\n").append(String.join("\n", stepLines)).append("</blockquote>\n");
+        }
+        // Квест со скином-наградой: пометка о замене курсивом между шагами и «Кому подходит», сумма - из настроек скина этого квеста
+        ru.gamebot.platform.service.PartnerMission skinNoteMission = ru.gamebot.platform.service.PartnerMissions.forQuest(quest);
+        if (ru.gamebot.platform.service.QuestSkinService.isSkinQuest(skinNoteMission)) {
+            sb.append("\n<i>Уже есть такой? Выбери любой другой скин до ")
+                    .append(ru.gamebot.platform.service.QuestSkinService.SKINS.get(skinNoteMission.key()).choiceRub()).append(" ₽.</i>\n");
         }
         for (String[] cond : splitQuestBlocks(quest.getRequirements())) {
             sb.append("\n<blockquote expandable><b>").append(escape(cond[0])).append("</b>");
@@ -10638,7 +10644,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private static final String LONG_AUTO_STEP = "Награда придёт автоматически после подтверждения банком. Проверка занимает до 30–60 дней — это нормально, просто дождитесь.";
-    private static final String SHORT_AUTO_STEP = "Награда после проверки банком, до 60 дней.";
+    private static final String SHORT_AUTO_STEP = "Ждём проверку банком, обычно до 60 дней.";
 
     /** Карточка с баннером перелистывается правкой одного сообщения, только пока видимый текст помещается в подпись фото. Если не помещается, по очереди убираем
      *  необязательные строки: про паспорт и коды, затем «множество других бонусов». Полные условия игрок видит после «Взять». */
@@ -10767,8 +10773,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     .append(clubExcashShown
                             ? "<b>Что дальше?</b>\nБанк подтверждает карту не сразу (обычно до 30 дней). Когда подтвердит, менеджер начислит тебе 💎 <b>+" + fmtExc(clubExcashAmt) + " EXCASH</b> (≈ " + fmtExc(pm.clubRewardRub())
                                 + " ₽): их можно вывести на карту или по СБП по курсу 100%. Пока награда ждёт на экране «Баланс»."
+                            : ru.gamebot.platform.service.QuestSkinService.isSkinQuest(pm) && bonusItem
+                            ? "<b>Что дальше?</b>\nКогда банк подтвердит карту, бот попросит ссылку обмена Steam и отправит скин."
+                            + (ru.gamebot.platform.service.PartnerMissions.grantsPartner(pm) ? " Когда придут 1 000 ₽ от банка, напиши менеджеру: он включит статус партнёра." : "")
                             : "<b>Что дальше?</b>\nБанк выплатит свой бонус не сразу. Когда деньги придут, напиши менеджеру: он проверит и ")
-                    .append(clubExcashShown ? "" : bonusItem ? "подарит <b>" + escape(pm.bonusItem()) + "</b>."
+                    .append(clubExcashShown || (ru.gamebot.platform.service.QuestSkinService.isSkinQuest(pm) && bonusItem) ? "" : bonusItem ? "подарит <b>" + escape(pm.bonusItem()) + "</b>."
                             : "начислит ещё <b>" + fmtExc(bonus) + " EXC</b> (≈ " + fmtExc(bonus / 100) + " ₽).");
             rows.add(List.of(partnerManagerButton(pm, sub, "💬 Написать менеджеру", "Вопрос по квесту «Миссия: " + pm.missionTitle() + "»",
                     clubExcashShown ? "банк подтвердил карту, проверьте и начислите EXCASH"
@@ -10795,7 +10804,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sb.append("🚀 <b>Квест взят!</b>\n\n🎮 Миссия: ").append(pm.missionTitle()).append("\n\n")
                         .append("<b>Что нужно сделать:</b>\n")
                         .append("1️⃣ Нажми «💳 Оформить карту»: откроется страница с выбором, ").append(escape(step1Tail)).append("\n\n")
-                        .append("2️⃣ ").append(escape(clause)).append(", останется только ждать, награда придёт автоматически после одобрения банком\n\n")
+                        .append("2️⃣ ").append(escape(clause)).append(skinWaitTail(pm)).append("\n\n")
                         .append("Если что-то непонятно, напиши менеджеру @").append(manager);
                 rows.add(List.of(keyboardFactory.url("💳 Оформить карту", ru.gamebot.platform.service.PartnerMissions.applyLinkFor(pm, sub.getId()))));
                 fn(user, ru.gamebot.platform.service.NewbieFunnelService.APPLY_SHOWN);
@@ -11075,6 +11084,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Ручной спонсорский квест без привязки к кампании и без проверки канала (партнёрская акция вроде «ОТП Карта»): карточка как у обычного
      *  квеста (суть на виду, инструкция и условия в раскрывающейся цитате), без подписи «Канал». */
+    /** Хвост второго шага на экране «Квест взят»: у квестов со скином награда не «приходит сама» - бот сначала попросит ссылку обмена Steam. */
+    private String skinWaitTail(ru.gamebot.platform.service.PartnerMission pm) {
+        if (!ru.gamebot.platform.service.QuestSkinService.isSkinQuest(pm)) {
+            return ", останется только ждать, награда придёт автоматически после одобрения банком";
+        }
+        return (pm.bankRewardRub() > 0 ? ", останется ждать: деньги банк выплатит сам, а после одобрения" : ", останется только ждать: после одобрения банком")
+                + " бот попросит ссылку обмена Steam и отправит скин";
+    }
+
     private boolean isManualPartnerSponsored(Quest quest) {
         return QuestService.isPartnerSponsored(quest);
     }
