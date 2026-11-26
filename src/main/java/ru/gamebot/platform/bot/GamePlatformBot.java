@@ -9584,17 +9584,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return ru.gamebot.platform.service.SponsoredQuestsService.categoryOf(q);
     }
 
-    /** Описание спонсорского квеста как в карточке бота (без HTML): у квеста ОТП вторым пунктом списка «✅» стоит строка про курс партнёра (зависит от текущего курса не-партнёров).
+    /** Описание спонсорского квеста как в карточке бота (без HTML): у квеста ОТП в конце списка «Что ты получаешь» стоит строка про курс партнёра (зависит от текущего курса не-партнёров).
      *  Используют карточка бота и мини-апп, чтобы текст совпадал. */
     public String sponsoredCardDescription(Quest quest) {
         String desc = quest.getDescription();
         if (desc == null || desc.isBlank()) return desc;
         ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(quest);
         if (pm == null || !"otp".equals(pm.key()) || !withdrawalTiersEnabled()) return desc;
-        String rateLine = "✅ Курс партнёра для EXC (твои EXC выводятся по курсу 100% вместо обычных ~" + nonPartnerPercent() + "%)\n";
+        String rateLine = "\n✅ Курс партнёра для EXC (твои EXC выводятся по курсу 100% вместо обычных ~" + nonPartnerPercent() + "%)";
         int firstLine = desc.indexOf("✅ ");
-        int firstEnd = firstLine < 0 ? -1 : desc.indexOf('\n', firstLine);
-        return firstEnd > 0 ? desc.substring(0, firstEnd + 1) + rateLine + desc.substring(firstEnd + 1) : desc;
+        int listEnd = firstLine < 0 ? -1 : desc.indexOf("\n\n", firstLine);
+        return listEnd > 0 ? desc.substring(0, listEnd) + rateLine + desc.substring(listEnd) : desc;
     }
 
     /** Для мини-аппа (экран вывода): «до N ₽» по ещё не выполненным игроком спонсорским квестам; партнёрам 0 (как в боте). */
@@ -10607,7 +10607,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             int listStart = desc.indexOf("Что ты получаешь:");
             int listEnd = listStart < 0 ? -1 : desc.indexOf("\n\n", listStart);
             if (descMission != null && "otp".equals(descMission.key())) {
-                // 15.11.2026 (текст владельца): у карточки банка строка про курс партнёра стоит второй в списке (после «1 000 ₽ за оформление карты»), строки «Итого» нет
+                // 26.11.2026 (владелец): у карточки банка строка про курс партнёра стоит в конце списка (после скина), строки «Итого» нет
                 desc = escape(sponsoredCardDescription(quest));
             } else if (descMission != null && listEnd > 0 && ru.gamebot.platform.service.PartnerMissions.grantsPartner(descMission)) {
                 StringBuilder extra = new StringBuilder();

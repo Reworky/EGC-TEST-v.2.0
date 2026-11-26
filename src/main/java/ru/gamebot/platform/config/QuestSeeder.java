@@ -3297,7 +3297,8 @@ public class QuestSeeder implements CommandLineRunner {
             {"tbankblack", "Оформи дебетовую карту Т-Банка Black и получи 400 ₽ 🎁"},
             {"ubrr", "Получи 500 ₽ на карту за бесплатную карту УБРиР 🎁"},
             {"vtb", "Получи 1 000 ₽ себе на карту + 500 ₽ от клуба 🎁"},
-            {"tblack", "Получи 500 ₽ на карту Т-Банка + 25 000 EXC 🎁"}};
+            {"tblack", "Получи 500 ₽ на карту Т-Банка + 25 000 EXC 🎁"},
+            {"otp", "Оформи бесплатную карту ОТП банка"}};
 
     private static ru.gamebot.platform.service.PartnerMission missionByKey(String key) {
         return ru.gamebot.platform.service.PartnerMissions.ALL.stream().filter(m -> m.key().equals(key)).findFirst().orElseThrow();
@@ -3362,7 +3363,8 @@ public class QuestSeeder implements CommandLineRunner {
                         + "✅ 1 000 EXC после проверки\n" + SKIN_PRIVACY,
                 skinSteps("1️⃣ Оформи заявку на бесплатную карту онлайн", "Купи картой от 500 ₽ одним чеком", "Получи 500 ₽ от банка и скин в Steam"),
                 "ℹ️ Кому подходит\n18+, паспорт РФ, не был клиентом Т-Банка. Скин даёт клуб, для него нужна ссылка обмена Steam.");
-        // ОТП: тексты карточки ставит applyOtpCardContent на каждом старте, здесь фиксируется только момент перехода (как и для ПСБ)
+        // ОТП: тексты карточки задаёт applyOtpCardContent, здесь - их разовое обновление и фиксация момента перехода на скин
+        applyOtpUnifiedCard();
         markSkinSwitch("otp");
         markSkinSwitch("psb");
     }
@@ -3750,7 +3752,8 @@ public class QuestSeeder implements CommandLineRunner {
     private static final String OTP_CARD_PREV10_TITLE = "Получи 1 000 ₽ себе на карту + Telegram Premium 🎁";
     private static final String OTP_CARD_PREV11_TITLE = "Получи 1 000 ₽ себе на карту 🎁";
     private static final String OTP_CARD_PREV12_TITLE = "Оформи карту ОТП банка и получи 1000 руб. на баланс";
-    private static final String OTP_CARD_TITLE = "Оформи бесплатную карту ОТП банка";
+    /** Единое с остальными дебетовыми квестами название; прежнее («Оформи бесплатную карту ОТП банка») переименовывает renameDebitSkinQuests. */
+    private static final String OTP_CARD_TITLE = ru.gamebot.platform.service.PartnerMissions.OTP.questTitle();
     /** Ключ app_settings: момент перехода на награду Telegram Premium вместо 50 000 EXC (заявки, взятые раньше, получают 50 000 или 100 000 EXC). */
     public static final String OTP_PREMIUM_CHANGE_KEY = "otp.premium.from";
     /** Ключ app_settings: момент перехода на награду 50 000 EXC (заявки, взятые раньше, получают 100 000). */
@@ -3765,18 +3768,31 @@ public class QuestSeeder implements CommandLineRunner {
     private void applyOtpCardContent(Quest q) {
         q.setTitle(OTP_CARD_TITLE);
         q.setModeratorChecklist(OTP_CARD_CHECKLIST);
-        // 15.11.2026 (текст владельца): Premium возвращается наградой. Строка про курс партнёра вставляется ботом второй в списке (процент считается из настроек)
-        q.setDescription("Награда за квест:\n"
-                + "✅ 1 000 ₽ от банка за карту и покупку\n"
-                + "✅ Скин AWP | Mortis (Field-Tested) в Steam\n"
-                + "Уже есть такой? Выбери любой другой скин до 400 ₽.\n"
-                + "✅ И множество других бонусов от банка\n\n"
-                + "🔒 Паспорт, коды из СМС и номер карты нам не нужны.\n\n"
-                + "Как это работает:");
+        // 26.11.2026 (владелец): карточка в формате остальных дебетовых квестов. Строку про курс партнёра бот добавляет последней в списке (процент считается из настроек)
+        q.setDescription("Что ты получаешь:\n"
+                + "✅ 1 000 ₽ от банка за покупку картой от 100 ₽\n"
+                + skinLines("AWP | Mortis (Field-Tested)", 400)
+                + SKIN_PRIVACY);
         q.setInstruction(skinSteps("1️⃣ Оформи заявку на бесплатную карту онлайн", "Получи карту курьером и за 30 дней купи от 100 ₽", "Получи 1 000 ₽ от банка и скин в Steam")); // шаблон владельца 20.11.2026, сверено с оффером 26.11.2026
         q.setRequirements("ℹ️ Кому подходит\n"
                 + "18+, паспорт РФ, живёшь в России (кроме Крыма, ДНР, ЛНР), 2 года не было продуктов ОТП Банка. Карту бери курьером: из офиса не засчитают. "
-                + "Заявку подавай без VPN. Для скина нужна ссылка обмена Steam. Условия определяет банк.");
+                + "Заявку подавай без VPN. Скин даёт клуб, для него нужна ссылка обмена Steam.");
+    }
+
+    /** Разовое обновление текста уже созданного квеста ОТП (ключ app_settings): дальше правки из админки не затираются. */
+    private void applyOtpUnifiedCard() {
+        String key = "quest.otp.card.unified.v1";
+        try {
+            if (appSettingRepository.findById(key).isPresent()) return;
+            Quest q = questRepository.findFirstByTitleAndGameName(OTP_CARD_TITLE, OTP_GAME).orElse(null);
+            if (q == null) return;
+            applyOtpCardContent(q);
+            questRepository.save(q);
+            saveSetting(key);
+            log.info("[QuestSeeder] OTP card unified with other debit cards");
+        } catch (Exception e) {
+            log.warn("[QuestSeeder] OTP card unify failed", e);
+        }
     }
 
     /**

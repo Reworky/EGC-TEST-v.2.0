@@ -70,7 +70,7 @@ public final class PartnerMissions {
     public static final PartnerMission OTP = PartnerMission.builder()
             .key("otp")
             .gameName("Банк-партнёр")
-            .questTitle("Оформи бесплатную карту ОТП банка")
+            .questTitle("Получи скин AWP | Mortis за бесплатную карту ОТП Банка 🎁")
             .listLabel("ОТП Банк")
             .bannerResource("skin_otp_banner.jpg")
             .stage1Banner("skin_otp_banner.jpg")
