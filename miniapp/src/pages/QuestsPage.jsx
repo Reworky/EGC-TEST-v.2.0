@@ -902,7 +902,7 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
               <div className="sponsor-title">💼 Спонсорские квесты</div>
               {sponsorOverview.prizeRub > 0 && (
                 <div className="sponsor-prize">
-                  🎁 Выполни все квесты из этого раздела и получи суммарно более <b>{sponsorOverview.prizeRub.toLocaleString('ru-RU')} ₽</b> на карту.
+                  🎁 Выполняй квесты и забирай награды: скины CS2 в Steam, деньги от банков и EXCASH.
                   <div className="sponsor-prize-note">Каждый квест доступен один раз на аккаунт.</div>
                 </div>
               )}

@@ -9703,9 +9703,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(keyboardFactory.callback("🤝 Экси рекомендует", "quests:section:picks"));
         }
         long sum = sponsoredBankRub(sponsoredNotDone(user, activeNow));
-        // 15.11.2026 (текст владельца): «суммарно более N ₽ на карту», «Каждый квест один раз на аккаунт» отдельным абзацем
+        // 26.11.2026 (текст владельца): без суммы в рублях - награды теперь разные (скины CS2, выплаты банков, EXCASH)
         String prize = sum > 0
-                ? "🎁 Выполни все квесты из этого раздела и получи суммарно более " + fmtExc(sum) + " ₽ на карту.\n\nКаждый квест доступен один раз на аккаунт.\n\n"
+                ? "🎁 Выполняй квесты и забирай награды: скины CS2 в Steam, деньги от банков и EXCASH.\n\nКаждый квест доступен один раз на аккаунт.\n\n"
                 : "";
         // 15.11.2026: баннер раздела (золотой билет с алмазом, пушистый Экси, вариант 1, одобрен владельцем)
         sendResourceBanner(user.getTelegramId(), "sponsored_quests_banner.jpg",
