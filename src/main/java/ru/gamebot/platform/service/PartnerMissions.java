@@ -44,6 +44,13 @@ public final class PartnerMissions {
     private static final String STAGE4_HEAD = "✅ <b>Отчёт принят, {reward} EXC начислены.</b>\n\n"
             + "⏳ <b>Квест ещё не закончен: остался финал за {bonusText}.</b> Теперь нужно дождаться выплаты банка.\n\n"
             + "<b>Что дальше:</b>\n";
+    /** Финал ОТП с 26.11.2026: награда клуба - скин AWP | Mortis (статус партнёра и вывод - как раньше). */
+    private static final String FINAL_TEXT_SKIN_OTP = "🏆 <b>Миссия выполнена!</b>\n\n"
+            + "Банк выплатил бонус. Скин <b>AWP | Mortis</b> отправляется обменом в Steam: если бот не попросил ссылку обмена за сутки, напиши менеджеру.\n\n"
+            + "🤝 Ты теперь партнёр клуба: курс вывода 100% на все твои EXC и партнёрские цены.\n\n"
+            + "Вывод открыт разово: всю накопленную сумму можно вывести одной заявкой, сверх обычного месячного лимита.\n\n"
+            + "🏦 Бейдж «Банкир EGC» уже в твоём профиле.";
+
     /** Финал ОТП, когда бонус банка - подарок Telegram Premium (с 12.11.2026), а не EXC. */
     private static final String FINAL_TEXT_PREMIUM = "🏆 <b>Миссия выполнена!</b>\n\n"
             + "Банк выплатил бонус. Менеджер подарит тебе <b>Telegram Premium на 1 месяц</b>: если подарка нет больше суток, напиши ему.\n\n"
@@ -65,15 +72,15 @@ public final class PartnerMissions {
             .gameName("Банк-партнёр")
             .questTitle("Оформи бесплатную карту ОТП банка")
             .listLabel("ОТП Банк")
-            .bannerResource("partner_card_banner.jpg")
-            .stage1Banner("partner_card_banner.jpg")
+            .bannerResource("skin_otp_banner.jpg")
+            .stage1Banner("skin_otp_banner.jpg")
             .shortTitle("Банковская карта")
             .missionTitle("банковская карта")
             .waitingName("Банковская карта")
             .rewardExc(0)
             .bonusExc(0)
-            .bonusItem("Telegram Premium на 1 месяц")
-            .finalTextItem(FINAL_TEXT_PREMIUM)
+            .bonusItem("скин AWP | Mortis в Steam")
+            .finalTextItem(FINAL_TEXT_SKIN_OTP)
             .windowDays(30)
             .bankPayDays(0)
             .bonusCommand("otpbonus")
@@ -123,14 +130,16 @@ public final class PartnerMissions {
     public static final PartnerMission T_BLACK = PartnerMission.builder()
             .key("tblack")
             .gameName("Т-Банк Black")
-            .questTitle("Получи 500 ₽ на карту Т-Банка + 25 000 EXC 🎁")
+            .questTitle("Получи 500 ₽ на карту Т-Банка + скин AK-47 | Elite Build 🎁")
             .listLabel("Т-Банк Black")
-            .bannerResource("tblack_card_banner.jpg")
+            .bannerResource("skin_tblack_banner.jpg")
             .shortTitle("Т-Банк Black")
             .missionTitle("карта Т-Банка Black")
             .waitingName("Карта Т-Банка")
             .rewardExc(1_000)
-            .bonusExc(25_000)
+            .bonusExc(0)
+            .bonusItem("скин AK-47 | Elite Build в Steam")
+            .finalTextItem("🏆 <b>Миссия выполнена!</b>\n\nБанк подтвердил выполнение. Скин <b>AK-47 | Elite Build</b> отправляется обменом в Steam: если бот не попросил ссылку обмена за сутки, напиши менеджеру.")
             .windowDays(90)
             .bankPayDays(30)
             .bonusCommand("tbbonus")
@@ -148,7 +157,7 @@ public final class PartnerMissions {
             .stage4Text(STAGE4_HEAD
                     + "1️⃣ Банк вернёт тебе 500 ₽ на карту в течение 30 дней после покупки (до {date}). Раньше денег может не быть.\n"
                     + "2️⃣ Когда деньги придут, вернись сюда и нажми <b>«💰 Банк вернул мне 500 ₽»</b>. Мы напомним об этом сами.\n"
-                    + "3️⃣ Мы проверим выплату и начислим {bonus} EXC.\n"
+                    + "3️⃣ Мы проверим выплату и отправим скин обменом в Steam.\n"
                     + "Если до {date7} денег нет, напиши менеджеру.")
             .finalText(FINAL_TEXT_PLAIN)
             .bankDateWord("до")
@@ -158,7 +167,7 @@ public final class PartnerMissions {
             .report1Prompt("Карта в приложении Т-Банка: видно, что это Black, оформленная недавно.\n🔒 Номер карты и счёта закрой (закрась или обрежь).")
             .report2Prompt(COMMON_REPORT2)
             // этапы 3, 4 и финал - те же картинки, что у ОТП (владелец 04.11.2026: экраны похожи, не уникализировать); картинки этапов 1-2 - позже, по дизайну карты/SIM
-            .stage1Banner("tblack_step1_banner.jpg")
+            .stage1Banner("skin_tblack_banner.jpg")
             .stage2WaitBanner("tblack_step2_banner.jpg")
             .stage2PayBanner("tblack_step2_pay_banner.jpg")
             .stage3Banner("otp_step3_banner.jpg")
@@ -247,17 +256,17 @@ public final class PartnerMissions {
     public static final PartnerMission VTB = PartnerMission.builder()
             .key("vtb")
             .gameName("ВТБ Киберкарта")
-            .questTitle("Получи 1 000 ₽ себе на карту + 500 ₽ от клуба 🎁")
+            .questTitle("Получи 1 000 ₽ на карту + скин M4A1-S | Electrum 🎁")
             .listLabel("ВТБ Киберкарта")
-            .bannerResource("vtb_card_banner.jpg")
-            .stage1Banner("vtb_card_banner.jpg")
+            .bannerResource("skin_vtb_banner.jpg")
+            .stage1Banner("skin_vtb_banner.jpg")
             .shortTitle("Киберкарта ВТБ")
             .missionTitle("Киберкарта ВТБ")
             .waitingName("Киберкарта ВТБ")
             .rewardExc(0)
             .bonusExc(0)
-            .bonusItem("500 ₽ на карту от клуба")
-            .finalTextItem("🏆 <b>Миссия выполнена!</b>\n\nБанк выплатил бонус. Менеджер переведёт тебе <b>500 ₽ на карту</b> от клуба: если денег нет больше суток, напиши ему.")
+            .bonusItem("скин M4A1-S | Electrum в Steam")
+            .finalTextItem("🏆 <b>Миссия выполнена!</b>\n\nБанк подтвердил выполнение. Скин <b>M4A1-S | Electrum</b> отправляется обменом в Steam: если бот не попросил ссылку обмена за сутки, напиши менеджеру.")
             .windowDays(30)
             .bankPayDays(30)
             .bonusCommand("vtbbonus")
@@ -301,7 +310,7 @@ public final class PartnerMissions {
             .bankRewardLine("💳 1 000 ₽ от банка на карту")
             .bankRewardRub(1000)
             .clubRewardRub(500)
-            .clubExcash(true)
+            .clubExcash(false)
             .managerProofText("Когда получишь карту и потратишь с неё 1 000 ₽ в сумме, пришли менеджеру @{manager} скриншоты: карта в приложении банка и «Детали операции» покупок (номера карты и счёта закрой).")
             .managerConditions("Нужна новая Киберкарта ВТБ (18+, РФ, новый клиент банка). Траты картой на 1 000 ₽ в течение 30 дней.")
             .applyLink(VTB_APPLY_LINK)
@@ -314,17 +323,17 @@ public final class PartnerMissions {
     public static final PartnerMission ALFA = PartnerMission.builder()
             .key("alfa")
             .gameName("Альфа-Банк Апельсиновая карта")
-            .questTitle("Получи 300 ₽ на карту за бесплатную карту Альфа-Банка 🎁")
+            .questTitle("Получи скин M4A1-S | Black Lotus за бесплатную карту Альфа-Банка 🎁")
             .listLabel("Альфа-Банк")
-            .bannerResource("alfa_card_banner.jpg")
-            .stage1Banner("alfa_card_banner.jpg")
+            .bannerResource("skin_alfa_banner.jpg")
+            .stage1Banner("skin_alfa_banner.jpg")
             .shortTitle("Апельсиновая карта Альфа-Банка")
             .missionTitle("Апельсиновая карта Альфа-Банка")
             .waitingName("Апельсиновая карта")
             .rewardExc(0)
             .bonusExc(0)
-            .bonusItem("300 ₽ на карту от клуба")
-            .finalTextItem("🏆 <b>Миссия выполнена!</b>\n\nБанк подтвердил карту. Менеджер переведёт тебе <b>300 ₽ на карту</b> от клуба: если денег нет больше суток, напиши ему.")
+            .bonusItem("скин M4A1-S | Black Lotus в Steam")
+            .finalTextItem("🏆 <b>Миссия выполнена!</b>\n\nБанк подтвердил выполнение. Скин <b>M4A1-S | Black Lotus</b> отправляется обменом в Steam: если бот не попросил ссылку обмена за сутки, напиши менеджеру.")
             .windowDays(30)
             .bankPayDays(30)
             .bonusCommand("alfabonus")
@@ -343,14 +352,14 @@ public final class PartnerMissions {
                     + "⏳ <b>Квест ещё не закончен: остался финал за {bonusText}.</b> Банку нужно подтвердить твою новую карту.\n\n"
                     + "<b>Что дальше:</b>\n"
                     + "1️⃣ Банк подтверждает карту обычно в течение 30 дней после покупки (до {date}). Раньше награды не будет.\n"
-                    + "2️⃣ Когда срок пройдёт, нажми <b>«💰 Спросить про 300 ₽»</b>. Мы напомним об этом сами.\n"
+                    + "2️⃣ Когда срок пройдёт, нажми <b>«🎁 Спросить про скин»</b>. Мы напомним об этом сами.\n"
                     + "3️⃣ Мы проверим подтверждение банка и {bonusGive}.\n"
                     + "Если до {date7} награды нет, напиши менеджеру.")
             .finalText(FINAL_TEXT_PLAIN)
             .bankDateWord("до")
-            .bankClaimButton("💰 Спросить про 300 ₽")
+            .bankClaimButton("🎁 Спросить про скин")
             .bankDayCheck("Проверь карту.")
-            .bankDayReminder("💰 <b>Банк мог уже подтвердить твою карту.</b>\n\nЕсли 300 ₽ от клуба ещё нет, нажми кнопку: мы проверим подтверждение банка и {bonusGive}. Напишем тебе.")
+            .bankDayReminder("💰 <b>Банк мог уже подтвердить твою карту.</b>\n\nЕсли бот ещё не попросил ссылку обмена, нажми кнопку: мы проверим подтверждение банка и {bonusGive}. Напишем тебе.")
             .deadlineReminder("⏰ <b>Осталось {days} дн., чтобы оплатить картой любую покупку</b> (до {win}).\n\nПотом банк не засчитает карту.")
             .report1Prompt("Карта в приложении Альфа-Банка: видно, что она новая и активная.\n🔒 Номер карты и счёта закрой (закрась или обрежь).")
             .report2Prompt("«Детали операции» покупки: должны быть видны продавец, сумма, дата и статус не «В обработке».")
@@ -366,10 +375,10 @@ public final class PartnerMissions {
             .finalReasons(new String[][]{
                     FINAL_FAKE,
                     {"📛 Условия акции не выполнены", "Условия банка не выполнены: у тебя был счёт в Альфа-Банке за последние 90 дней, карта оформлена не по ссылке (или при включённом VPN), либо покупка сделана позже 30 дней после получения карты."}})
-            .bankRewardLine("🎁 300 ₽ на карту от клуба")
+            .bankRewardLine("🎁 Скин M4A1-S | Black Lotus в Steam")
             .bankRewardRub(0)
             .clubRewardRub(300)
-            .clubExcash(true)
+            .clubExcash(false)
             .managerProofText("Когда получишь карту и сделаешь любую покупку, пришли менеджеру @{manager} скриншоты: карта в приложении банка и «Детали операции» покупки (номера карты и счёта закрой).")
             .managerConditions("Нужна новая Апельсиновая карта Альфа-Банка (18+, гражданство РФ, не было счёта в Альфа-Банке 90 дней). Одна покупка в течение 30 дней после получения карты.")
             .applyLink(ALFA_APPLY_LINK)
@@ -382,17 +391,17 @@ public final class PartnerMissions {
     public static final PartnerMission FORA = PartnerMission.builder()
             .key("fora")
             .gameName("Фора-Банк Все включено")
-            .questTitle("Получи 400 ₽ на карту за заказ карты Фора-Банка 🎁")
+            .questTitle("Получи скин FAMAS | Rapid Eye Movement за карту Фора-Банка 🎁")
             .listLabel("Фора-Банк")
-            .bannerResource("fora_card_banner.jpg")
-            .stage1Banner("fora_card_banner.jpg")
+            .bannerResource("skin_fora_banner.jpg")
+            .stage1Banner("skin_fora_banner.jpg")
             .shortTitle("Карта «Все включено» Фора-Банка")
             .missionTitle("карта «Все включено» Фора-Банка")
             .waitingName("Карта Фора-Банка")
             .rewardExc(0)
             .bonusExc(0)
-            .bonusItem("400 ₽ на карту от клуба")
-            .finalTextItem("🏆 <b>Миссия выполнена!</b>\n\nБанк подтвердил карту. Менеджер переведёт тебе <b>400 ₽ на карту</b> от клуба: если денег нет больше суток, напиши ему.")
+            .bonusItem("скин FAMAS | Rapid Eye Movement в Steam")
+            .finalTextItem("🏆 <b>Миссия выполнена!</b>\n\nБанк подтвердил выполнение. Скин <b>FAMAS | Rapid Eye Movement</b> отправляется обменом в Steam: если бот не попросил ссылку обмена за сутки, напиши менеджеру.")
             .windowDays(30)
             .bankPayDays(30)
             .bonusCommand("forabonus")
@@ -411,14 +420,14 @@ public final class PartnerMissions {
                     + "⏳ <b>Квест ещё не закончен: остался финал за {bonusText}.</b> Банку нужно подтвердить твою новую карту.\n\n"
                     + "<b>Что дальше:</b>\n"
                     + "1️⃣ Банк подтверждает карту обычно в течение 30 дней после покупки (до {date}). Раньше награды не будет.\n"
-                    + "2️⃣ Когда срок пройдёт, нажми <b>«💰 Спросить про 400 ₽»</b>. Мы напомним об этом сами.\n"
+                    + "2️⃣ Когда срок пройдёт, нажми <b>«🎁 Спросить про скин»</b>. Мы напомним об этом сами.\n"
                     + "3️⃣ Мы проверим подтверждение банка и {bonusGive}.\n"
                     + "Если до {date7} награды нет, напиши менеджеру.")
             .finalText(FINAL_TEXT_PLAIN)
             .bankDateWord("до")
-            .bankClaimButton("💰 Спросить про 400 ₽")
+            .bankClaimButton("🎁 Спросить про скин")
             .bankDayCheck("Проверь карту.")
-            .bankDayReminder("💰 <b>Банк мог уже подтвердить твою карту.</b>\n\nЕсли 400 ₽ от клуба ещё нет, нажми кнопку: мы проверим подтверждение банка и {bonusGive}. Напишем тебе.")
+            .bankDayReminder("💰 <b>Банк мог уже подтвердить твою карту.</b>\n\nЕсли бот ещё не попросил ссылку обмена, нажми кнопку: мы проверим подтверждение банка и {bonusGive}. Напишем тебе.")
             .deadlineReminder("⏰ <b>Осталось {days} дн., чтобы оплатить картой покупку от 500 ₽</b> (до {win}).\n\nПотом банк не засчитает карту.")
             .report1Prompt("Карта в приложении Фора-Банка: видно, что она новая и активная.\n🔒 Номер карты и счёта закрой (закрась или обрежь).")
             .report2Prompt("«Детали операции» покупки: должны быть видны продавец, сумма (от 500 ₽), дата и статус не «В обработке».")
@@ -435,10 +444,10 @@ public final class PartnerMissions {
             .finalReasons(new String[][]{
                     FINAL_FAKE,
                     {"📛 Условия акции не выполнены", "Условия банка не выполнены: карта оформлена не по ссылке (или при включённом VPN), не активирована, либо покупка от 500 ₽ сделана позже 30 дней после активации."}})
-            .bankRewardLine("🎁 400 ₽ на карту от клуба")
+            .bankRewardLine("🎁 Скин FAMAS | Rapid Eye Movement в Steam")
             .bankRewardRub(0)
             .clubRewardRub(400)
-            .clubExcash(true)
+            .clubExcash(false)
             .compensationExc(10000)
             .managerProofText("Когда активируешь карту и сделаешь покупку от 500 ₽, пришли менеджеру @{manager} скриншоты: карта в приложении банка и «Детали операции» покупки (номера карты и счёта закрой).")
             .managerConditions("Нужна новая карта «Все включено» Фора-Банка (18+, РФ). Активация и одна покупка от 500 ₽ в течение 30 дней.")
@@ -522,17 +531,17 @@ public final class PartnerMissions {
     public static final PartnerMission UBRR = PartnerMission.builder()
             .key("ubrr")
             .gameName("УБРиР Моя Жизнь")
-            .questTitle("Получи 500 ₽ на карту за бесплатную карту УБРиР 🎁")
+            .questTitle("Получи скин AWP | Green Energy за бесплатную карту УБРиР 🎁")
             .listLabel("УБРиР")
-            .bannerResource("ubrr_card_banner.jpg")
-            .stage1Banner("ubrr_card_banner.jpg")
+            .bannerResource("skin_ubrr_banner.jpg")
+            .stage1Banner("skin_ubrr_banner.jpg")
             .shortTitle("Карта «Моя Жизнь» УБРиР")
             .missionTitle("карта «Моя Жизнь» УБРиР")
             .waitingName("Карта УБРиР")
             .rewardExc(0)
             .bonusExc(0)
-            .bonusItem("500 ₽ на карту от клуба")
-            .finalTextItem("🏆 <b>Миссия выполнена!</b>\n\nБанк подтвердил карту. Менеджер переведёт тебе <b>500 ₽ на карту</b> от клуба: если денег нет больше суток, напиши ему.")
+            .bonusItem("скин AWP | Green Energy в Steam")
+            .finalTextItem("🏆 <b>Миссия выполнена!</b>\n\nБанк подтвердил выполнение. Скин <b>AWP | Green Energy</b> отправляется обменом в Steam: если бот не попросил ссылку обмена за сутки, напиши менеджеру.")
             .windowDays(30)
             .bankPayDays(30)
             .bonusCommand("ubrrbonus")
@@ -551,14 +560,14 @@ public final class PartnerMissions {
                     + "⏳ <b>Квест ещё не закончен: остался финал за {bonusText}.</b> Банку нужно подтвердить твою новую карту.\n\n"
                     + "<b>Что дальше:</b>\n"
                     + "1️⃣ Банк подтверждает карту обычно в течение 30 дней после покупки (до {date}). Раньше награды не будет.\n"
-                    + "2️⃣ Когда срок пройдёт, нажми <b>«💰 Спросить про 500 ₽»</b>. Мы напомним об этом сами.\n"
+                    + "2️⃣ Когда срок пройдёт, нажми <b>«🎁 Спросить про скин»</b>. Мы напомним об этом сами.\n"
                     + "3️⃣ Мы проверим подтверждение банка и {bonusGive}.\n"
                     + "Если до {date7} награды нет, напиши менеджеру.")
             .finalText(FINAL_TEXT_PLAIN)
             .bankDateWord("до")
-            .bankClaimButton("💰 Спросить про 500 ₽")
+            .bankClaimButton("🎁 Спросить про скин")
             .bankDayCheck("Проверь карту.")
-            .bankDayReminder("💰 <b>Банк мог уже подтвердить твою карту.</b>\n\nЕсли 500 ₽ от клуба ещё нет, нажми кнопку: мы проверим подтверждение банка и {bonusGive}. Напишем тебе.")
+            .bankDayReminder("💰 <b>Банк мог уже подтвердить твою карту.</b>\n\nЕсли бот ещё не попросил ссылку обмена, нажми кнопку: мы проверим подтверждение банка и {bonusGive}. Напишем тебе.")
             .deadlineReminder("⏰ <b>Осталось {days} дн., чтобы оплатить картой покупку от 1 000 ₽</b> (до {win}).\n\nПотом банк не засчитает карту.")
             .report1Prompt("Карта в приложении УБРиР: видно, что она новая и активная.\n🔒 Номер карты и счёта закрой (закрась или обрежь).")
             .report2Prompt("«Детали операции» покупки: должны быть видны продавец, сумма (от 1 000 ₽), дата и статус не «В обработке».")
@@ -575,10 +584,10 @@ public final class PartnerMissions {
             .finalReasons(new String[][]{
                     FINAL_FAKE,
                     {"📛 Условия акции не выполнены", "Условия банка не выполнены: карта оформлена не по ссылке (или при включённом VPN), не активирована, либо покупка от 1 000 ₽ сделана позже 30 дней после активации."}})
-            .bankRewardLine("🎁 500 ₽ на карту от клуба")
+            .bankRewardLine("🎁 Скин AWP | Green Energy в Steam")
             .bankRewardRub(0)
             .clubRewardRub(500)
-            .clubExcash(true)
+            .clubExcash(false)
             .compensationExc(50000)
             .managerProofText("Когда активируешь карту и сделаешь покупку от 1 000 ₽, пришли менеджеру @{manager} скриншоты: карта в приложении банка и «Детали операции» покупки (номера карты и счёта закрой).")
             .managerConditions("Нужна новая карта «Моя Жизнь» УБРиР (житель РФ, возраст по условиям банка). Активация и одна покупка от 1 000 ₽ в течение 30 дней.")
@@ -858,17 +867,17 @@ public final class PartnerMissions {
     public static final PartnerMission TBANKBLACK = PartnerMission.builder()
             .key("tbankblack")
             .gameName("Т-Банк Black (дебетовая)")
-            .questTitle("Оформи дебетовую карту Т-Банка Black и получи 400 ₽ 🎁")
+            .questTitle("Оформи карту Т-Банка Black и получи скин Desert Eagle | Firebreathing 🎁")
             .listLabel("Т-Банк Black")
-            .bannerResource("tbankblack_card_banner.jpg")
-            .stage1Banner("tbankblack_card_banner.jpg")
+            .bannerResource("skin_tbankblack_banner.jpg")
+            .stage1Banner("skin_tbankblack_banner.jpg")
             .shortTitle("Карта Т-Банка Black")
             .missionTitle("карта Т-Банка Black")
             .waitingName("Карта Т-Банка Black")
             .rewardExc(0)
             .bonusExc(0)
-            .bonusItem("400 ₽ на карту от клуба")
-            .finalTextItem("🏆 <b>Миссия выполнена!</b>\n\nБанк подтвердил карту. Менеджер переведёт тебе <b>400 ₽ на карту</b> от клуба: если денег нет больше суток, напиши ему.")
+            .bonusItem("скин Desert Eagle | Firebreathing в Steam")
+            .finalTextItem("🏆 <b>Миссия выполнена!</b>\n\nБанк подтвердил выполнение. Скин <b>Desert Eagle | Firebreathing</b> отправляется обменом в Steam: если бот не попросил ссылку обмена за сутки, напиши менеджеру.")
             .windowDays(30)
             .bankPayDays(14)
             .bonusCommand("tbankblackbonus")
@@ -889,9 +898,9 @@ public final class PartnerMissions {
                     + "Если до {date7} награды нет, напиши менеджеру.")
             .finalText(FINAL_TEXT_PLAIN)
             .bankDateWord("до")
-            .bankClaimButton("💰 Спросить про 400 ₽")
+            .bankClaimButton("🎁 Спросить про скин")
             .bankDayCheck("Проверь карту.")
-            .bankDayReminder("💰 <b>Банк мог уже подтвердить твою карту.</b>\n\nЕсли 400 ₽ от клуба ещё нет, нажми кнопку: мы проверим подтверждение банка и {bonusGive}. Напишем тебе.")
+            .bankDayReminder("💰 <b>Банк мог уже подтвердить твою карту.</b>\n\nЕсли бот ещё не попросил ссылку обмена, нажми кнопку: мы проверим подтверждение банка и {bonusGive}. Напишем тебе.")
             .deadlineReminder("⏰ <b>Осталось {days} дн., чтобы активировать карту и сделать по ней операцию</b> (до {win}).\n\nПотом банк не засчитает карту.")
             .report1Prompt("Подтверждение из приложения банка.\n🔒 Личные данные закрой.")
             .report2Prompt("Дополнительное подтверждение из приложения банка.\n🔒 Личные данные закрой.")
@@ -902,10 +911,10 @@ public final class PartnerMissions {
             .finalReasons(new String[][]{
                     FINAL_FAKE,
                     {"📛 Условия банка не выполнены", "Условия банка не выполнены: заявка оформлена не по нашей ссылке (или при включённом VPN), либо банк не подтвердил карту."}})
-            .bankRewardLine("🎁 400 ₽ на карту от клуба")
+            .bankRewardLine("🎁 Скин Desert Eagle | Firebreathing в Steam")
             .bankRewardRub(0)
             .clubRewardRub(400)
-            .clubExcash(true)
+            .clubExcash(false)
             .compensationExc(0)
             .managerProofText("Когда получишь карту, активируешь её и сделаешь по ней операцию, пришли менеджеру")
             .managerConditions("Нужна новая карта Т-Банка Black (заявка из РФ). Банк должен подтвердить активацию карты и первую операцию.")

@@ -1838,6 +1838,12 @@ public class QuestService {
         return questSubmissionRepository.countBonusPaid(userId, gameName) > 0;
     }
 
+    /** Последняя неотменённая заявка игрока по партнёрской миссии игры gameName (для скина-награды по команде админа) или null. */
+    public QuestSubmission findLatestPartnerSubmission(Long userId, String gameName) {
+        List<QuestSubmission> list = questSubmissionRepository.findNotCancelledByUserAndGame(userId, gameName);
+        return list.isEmpty() ? null : list.get(0);
+    }
+
     /** Отмечает «бонус выплачен» на последней одобренной заявке игрока по миссии игры gameName. false - одобренной заявки нет (бонус начислен вручную без миссии). */
     @Transactional
     public boolean markPartnerBonusPaid(Long userId, String gameName) {

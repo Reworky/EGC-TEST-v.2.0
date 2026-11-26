@@ -56,6 +56,9 @@ public class QuestSeeder implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
 
+        // ДО блоков создания банковских квестов: переименование под награду-скин, иначе под новым названием создался бы дубль
+        renameDebitSkinQuests();
+
         // Удаляем конкретные устаревшие квесты
         for (String[] titleAndGame : new String[][]{
                 {"8 убийств в одном матче",          "PUBG Mobile"},
@@ -3242,7 +3245,112 @@ public class QuestSeeder implements CommandLineRunner {
         applyManagerProofHeaders();
         applyStepsTemplate();
         applyPsbSkinCard();
+        applyDebitSkinCards();
         switchOffStarsTyn0xQuest();
+    }
+
+    /** Дебетовые квесты (26.11.2026, владелец): награда клуба - скин вместо рублей/Premium/EXC. Прежние названия - только для разового переименования. */
+    private static final String[][] SKIN_OLD_TITLES = {
+            {"alfa", "Получи 300 ₽ на карту за бесплатную карту Альфа-Банка 🎁"},
+            {"fora", "Получи 400 ₽ на карту за заказ карты Фора-Банка 🎁"},
+            {"tbankblack", "Оформи дебетовую карту Т-Банка Black и получи 400 ₽ 🎁"},
+            {"ubrr", "Получи 500 ₽ на карту за бесплатную карту УБРиР 🎁"},
+            {"vtb", "Получи 1 000 ₽ себе на карту + 500 ₽ от клуба 🎁"},
+            {"tblack", "Получи 500 ₽ на карту Т-Банка + 25 000 EXC 🎁"}};
+
+    private static ru.gamebot.platform.service.PartnerMission missionByKey(String key) {
+        return ru.gamebot.platform.service.PartnerMissions.ALL.stream().filter(m -> m.key().equals(key)).findFirst().orElseThrow();
+    }
+
+    private void renameDebitSkinQuests() {
+        for (String[] row : SKIN_OLD_TITLES) {
+            try {
+                ru.gamebot.platform.service.PartnerMission pm = missionByKey(row[0]);
+                Quest q = questRepository.findFirstByTitleAndGameName(row[1], pm.gameName()).orElse(null);
+                if (q == null || questRepository.findFirstByTitleAndGameName(pm.questTitle(), pm.gameName()).isPresent()) continue;
+                q.setTitle(pm.questTitle());
+                questRepository.save(q);
+                log.info("[QuestSeeder] Renamed debit quest for skin reward: {}", row[0]);
+            } catch (Exception e) {
+                log.warn("[QuestSeeder] Rename for skin failed: {}", row[0], e);
+            }
+        }
+    }
+
+    /** Строка «Что ты получаешь» + пометка о замене скина (курсивом её делает карточка бота). */
+    private static String skinLines(String skinWithWear, int choiceRub) {
+        return "✅ Скин " + skinWithWear + " в Steam\nУже есть такой? Выбери любой другой скин до " + choiceRub + " ₽.\n";
+    }
+
+    private static final String SKIN_PRIVACY = "\n🔒 Паспорт, коды из СМС и номер карты нам не нужны.\n\nКак это работает:";
+    private static final String SKIN_STEAM_NOTE = " Для скина нужен Steam с открытыми обменами и ссылка на обмен.";
+
+    /** Тексты карточек со скином. Каждый квест - один раз (ключ app_settings); заодно фиксируется момент перехода: по заявкам, взятым раньше, скин автоматически не покупается. */
+    private void applyDebitSkinCards() {
+        applyDebitSkinCard("alfa", "Что ты получаешь:\n" + skinLines("M4A1-S | Black Lotus (Field-Tested)", 300)
+                        + "✅ Кэшбэк до 7% Апельсинками в Пятёрочке и Перекрёстке\n✅ Карта бесплатная\n" + SKIN_PRIVACY,
+                stepsTemplate("1️⃣ Оформи заявку на бесплатную карту онлайн", "Совершите любую покупку", "Получи скин в Steam"),
+                "ℹ️ Кому подходит\nТебе 18+, ты гражданин РФ, у тебя есть телефон и не было счёта в Альфа-Банке последние 90 дней. "
+                        + "Банк клиенту денег за карту не платит: скин даёт клуб." + SKIN_STEAM_NOTE + " Условия карты определяет банк, оформив карту, ты с ними согласен.");
+        applyDebitSkinCard("fora", "Что ты получаешь:\n" + skinLines("FAMAS | Rapid Eye Movement (Field-Tested)", 400)
+                        + "✅ 💎 +10 000 EXCASH: компенсация траты на покупку\n✅ Кэшбэк рублями от банка до 10 000 ₽ в месяц\n✅ Первый месяц обслуживания бесплатно\n" + SKIN_PRIVACY,
+                stepsTemplate("1️⃣ Оформи заявку на бесплатную карту онлайн", "Совершите покупку на сумму 500р", "Получи скин в Steam"),
+                "ℹ️ Кому подходит\nТебе 18+ и у тебя паспорт РФ. Карту выдают в офисе банка или курьером, где доставка доступна. "
+                        + "Банк клиенту денег за карту не платит: скин даёт клуб." + SKIN_STEAM_NOTE + " Условия обслуживания и кэшбэка определяет банк, оформив карту, ты с ними согласен.");
+        applyDebitSkinCard("tbankblack", "Что ты получаешь:\n" + skinLines("Desert Eagle | Firebreathing (Factory New)", 400)
+                        + "✅ Дебетовая карта Black: кэшбэк, бесплатные переводы и снятие наличных\n✅ Карту передаёт представитель банка\n" + SKIN_PRIVACY,
+                stepsTemplate("1️⃣ Оформи заявку на карту Black", "Активируйте карту и сделайте первую операцию", "Получи скин в Steam"),
+                "ℹ️ Кому подходит\nЗаявка из России, нужны документы по требованиям банка. Карта должна быть новой, один раз на аккаунт. "
+                        + "Банк клиенту денег за карту не платит: скин даёт клуб." + SKIN_STEAM_NOTE + " Условия обслуживания определяет банк, оформив карту, ты с ними согласен.");
+        applyDebitSkinCard("ubrr", "Что ты получаешь:\n" + skinLines("AWP | Green Energy (Field-Tested)", 500)
+                        + "✅ 💎 +50 000 EXCASH: компенсация твоей траты 1 000 ₽ на покупку\n✅ Кэшбэк от банка до 6% в четырёх категориях, до 3 000 ₽ в месяц\n✅ Бесплатная карта: офис или бесплатная доставка\n" + SKIN_PRIVACY,
+                stepsTemplate("1️⃣ Оформи заявку на бесплатную карту онлайн", "Совершите покупку на сумму 1000р", "Получи скин в Steam"),
+                "ℹ️ Кому подходит\nТы житель России, тебе 18+ и у тебя паспорт РФ. Банк клиенту денег за карту не платит: скин даёт клуб." + SKIN_STEAM_NOTE
+                        + " Повышенный кэшбэк действует при подписке банка «Моя Жизнь+», её условия смотри на сайте банка. Оформив карту, ты согласен с условиями банка.");
+        applyDebitSkinCard("vtb", "Что ты получаешь:\n✅ 1 000 ₽ от банка за оформление карты\n" + skinLines("M4A1-S | Electrum (Factory New)", 500)
+                        + "✅ И множество других бонусов от банка\n" + SKIN_PRIVACY,
+                stepsTemplate("1️⃣ Оформи заявку на бесплатную карту онлайн", "Совершите покупки на сумму 1000р", "Получи 1 000 ₽ от банка и скин в Steam"),
+                "ℹ️ Кому подходит\nТебе 18+, ты живёшь в России, у тебя паспорт РФ, и ты ещё не был клиентом Банка ВТБ. Карту привозит курьер в регионах присутствия банка."
+                        + SKIN_STEAM_NOTE + " Условия и бонусы определяет банк, оформив карту, ты с ними согласен.");
+        applyDebitSkinCard("tblack", "Что ты получаешь:\n✅ 500 ₽ от банка на твою карту Black\n" + skinLines("AK-47 | Elite Build (Minimal Wear)", 250)
+                        + "✅ 1 000 EXC после проверки\n\nНужна одна покупка от 500 ₽ одним чеком.\n🔒 Паспорт, коды из СМС и номер карты нам не нужны.\n\nКак это работает:",
+                stepsTemplate("1️⃣ Оформи заявку на бесплатную карту онлайн", "Совершите покупку на сумму 500р", "Получи 500 ₽ от банка и скин в Steam"),
+                "ℹ️ Кому подходит\nТебе 18+, ты живёшь в России, у тебя паспорт РФ, ты никогда не был клиентом Т-Банка и у тебя не было карт Т-Банка за последний год (Black, S7, ALL Airlines, ALL Games, Drive, Джуниор и др.). "
+                        + "Один раз на аккаунт. 500 ₽ платит банк по правилам своей акции «Приведи друга», скин даёт клуб." + SKIN_STEAM_NOTE + " Взяв квест, ты с этим согласен.");
+        // ОТП: тексты карточки ставит applyOtpCardContent на каждом старте, здесь фиксируется только момент перехода (как и для ПСБ)
+        markSkinSwitch("otp");
+        markSkinSwitch("psb");
+    }
+
+    private void applyDebitSkinCard(String missionKey, String description, String instruction, String requirements) {
+        String key = "quest.debitskin.v1." + missionKey;
+        try {
+            if (appSettingRepository.findById(key).isPresent()) return;
+            ru.gamebot.platform.service.PartnerMission pm = missionByKey(missionKey);
+            Quest q = questRepository.findFirstByTitleAndGameName(pm.questTitle(), pm.gameName()).orElse(null);
+            if (q == null) return;
+            q.setDescription(description);
+            q.setInstruction(instruction);
+            q.setRequirements(requirements);
+            questRepository.save(q);
+            saveSetting(key);
+            markSkinSwitch(missionKey);
+            log.info("[QuestSeeder] Skin reward card applied: {}", missionKey);
+        } catch (Exception e) {
+            log.warn("[QuestSeeder] Skin card failed: {}", missionKey, e);
+        }
+    }
+
+    private void markSkinSwitch(String missionKey) {
+        String key = ru.gamebot.platform.service.QuestSkinService.SWITCH_KEY_PREFIX + missionKey;
+        if (appSettingRepository.findById(key).isEmpty()) saveSetting(key);
+    }
+
+    private void saveSetting(String key) {
+        ru.gamebot.platform.domain.model.AppSetting a = new ru.gamebot.platform.domain.model.AppSetting();
+        a.setKey(key);
+        a.setValue(LocalDateTime.now().toString());
+        appSettingRepository.save(a);
     }
 
     private static final String PSB_OLD_TITLE = "Получи 500 ₽ на карту за бесплатную карту ПСБ 🎁";
@@ -3592,7 +3700,8 @@ public class QuestSeeder implements CommandLineRunner {
         // 15.11.2026 (текст владельца): Premium возвращается наградой. Строка про курс партнёра вставляется ботом второй в списке (процент считается из настроек)
         q.setDescription("Награда за квест:\n"
                 + "✅ 1 000 ₽ за оформление карты\n"
-                + "✅ Telegram Premium (1 месяц)\n"
+                + "✅ Скин AWP | Mortis (Field-Tested) в Steam\n"
+                + "Уже есть такой? Выбери любой другой скин до 400 ₽.\n"
                 + "✅ И множество других бонусов от банка\n\n"
                 + "🔒 Паспорт, коды из СМС и номер карты нам не нужны.\n\n"
                 + "Как это работает:");
