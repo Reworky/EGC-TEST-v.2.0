@@ -2223,8 +2223,9 @@ public class QuestSeeder implements CommandLineRunner {
         }
 
         // ── Игровой оффер: Sacralium (Admitad, страница-лендинг), 26.11.2026 ─────────
-        // Решение владельца: регистрация без награды, две цели. Этап 1 «Активный игрок» - 700 EXCASH (GameStageRewardService), этап 2 «Активный игрок 2» - награда квеста
-        // 10 000 EXCASH (≈30% нижней выплаты 327,90 ₽). Постбек принимает лендинг. ВНИМАНИЕ: правила программы - только немотивированный трафик; запуск на риск владельца.
+        // Решение владельца: регистрация без награды, две цели. Этап 1 «Активный игрок» (GameStageRewardService), этап 2 «Активный игрок 2» - награда квеста.
+        // С 26.11.2026 (карточка одобрена владельцем) по 30% выплаты, суммы для России и других стран разные. Постбек принимает лендинг.
+        // ВНИМАНИЕ: правила программы - только немотивированный трафик; запуск на риск владельца.
         // Создаётся НЕАКТИВНЫМ («Управление квестами → Включить»).
         gameCatalogService.setDifficultyMode("Sacralium", "FLAT", SACRALIUM_REWARD_EXC, 0);
         if (appSettingRepository.findById(SACRALIUM_CARD_KEY).isEmpty()) {
@@ -2245,12 +2246,14 @@ public class QuestSeeder implements CommandLineRunner {
             sq.setDescription("Браузерная MMORPG в мрачном скандинавском фэнтези: PvP-бои, подземелья и боссы. Играть нужно с компьютера.");
             sq.setInstruction("Открой страницу игры и зарегистрируйся:\n"
                     + "https://igro-afisha.pages.dev/?tg={TG_ID}#sacralium\n\n"
-                    + "Играй с компьютера: 7 ₽ за первый этап и 100 ₽ за второй, когда партнёр их засчитает.");
+                    + "Играй с компьютера. Первый этап: 14,76 ₽ из России, 7,38 ₽ из других стран. Второй: 196,71 ₽ из России, 98,37 ₽ из других стран.");
             sq.setRequirements("📎 Как получить\n"
-                    + "1. Нажми «Взять», открой страницу игры и зарегистрируйся (за регистрацию награды нет).\n"
-                    + "2. Играй с компьютера, пока партнёр не засчитает тебя активным игроком: 7 ₽.\n"
-                    + "3. Играй дальше до второго этапа, «Активный игрок 2»: ещё 100 ₽.\n\n"
-                    + "💰 Рубли начислим в EXCASH, они выводятся без лимитов.\n"
+                    + "1. Нажми «Взять», открой страницу игры и зарегистрируйся: без награды\n"
+                    + "2. Играй с компьютера, пока тебя не засчитают активным игроком:\n"
+                    + "14,76 ₽ из России, 7,38 ₽ из других стран\n"
+                    + "3. Играй дальше до второго этапа, «Активный игрок 2»:\n"
+                    + "196,71 ₽ из России, 98,37 ₽ из других стран\n\n"
+                    + "💰 Каждый шаг начисляем отдельно, после подтверждения партнёра. Рубли начислим в EXCASH, они выводятся без лимитов.\n"
                     + "Реклама · erid: 2bL9aMPo2e49hMef4rqytJKLHd");
             sq.setExternalAutoApprove(true);
             sq.setExternalOfferId("sacralium");
@@ -3652,8 +3655,8 @@ public class QuestSeeder implements CommandLineRunner {
     private static final String JADE_CARD_KEY = "jade.card.v2.done";   // v2: две суммы по стране
 
     private static final String SACRALIUM_TITLE = "Sacralium: играй в новую MMORPG";
-    private static final long SACRALIUM_REWARD_EXC = 10_000L;
-    private static final String SACRALIUM_CARD_KEY = "sacralium.card.v1.done";
+    private static final long SACRALIUM_REWARD_EXC = 9_837L;   // этап 2 для других стран: 98,37 ₽; за Россию доплата (GameStageRewardService)
+    private static final String SACRALIUM_CARD_KEY = "sacralium.card.v2.done";   // v2: две суммы по стране
 
     private static final String PSB_OLD_TITLE = "Получи 500 ₽ на карту за бесплатную карту ПСБ 🎁";
 

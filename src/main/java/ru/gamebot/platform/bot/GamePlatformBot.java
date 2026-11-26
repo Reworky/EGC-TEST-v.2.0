@@ -11134,14 +11134,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<String> rewards = new ArrayList<>();
         ru.gamebot.platform.service.GameStageRewardService.RussiaExtra russiaExtra = quest.getExternalOfferId() == null ? null
                 : ru.gamebot.platform.service.GameStageRewardService.RUSSIA_EXTRAS.get(quest.getExternalOfferId());
-        if (russiaExtra != null) {
+        if ("sacralium".equals(quest.getExternalOfferId())) {
+            // Два этапа и две суммы по стране: в награде общий итог, суммы по этапам - в «Как получить»
+            rewards.add("до " + rubWithKopecks(ru.gamebot.platform.service.GameStageRewardService.SACRALIUM_STAGE1_RU_EXC + coins
+                    + (russiaExtra == null ? 0 : russiaExtra.exc())) + " ₽ игрокам из России");
+            rewards.add("до " + rubWithKopecks(ru.gamebot.platform.service.GameStageRewardService.SACRALIUM_STAGE1_EXC + coins) + " ₽ из других стран");
+        } else if (russiaExtra != null) {
             // Две суммы по стране (26.11.2026, владелец): сеть платит за Россию больше
             rewards.add(rubWithKopecks(coins + russiaExtra.exc()) + " ₽ игрокам из России");
             rewards.add(rubWithKopecks(coins) + " ₽ из других стран");
-        } else if ("sacralium".equals(quest.getExternalOfferId())) {
-            // Два этапа: сначала рубли (правило владельца), токены называются при начислении
-            rewards.add(rubWithKopecks(ru.gamebot.platform.service.GameStageRewardService.SACRALIUM_STAGE1_EXC) + " ₽ за первый этап");
-            rewards.add(rubWithKopecks(coins) + " ₽ за второй этап");
         } else if ("rodina".equals(quest.getExternalOfferId())) {
             // Награда квеста - сумма всех шагов, суммы по шагам - в «Как получить»
             rewards.add("до " + rubWithKopecks(coins) + " ₽");
@@ -11175,7 +11176,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             else sb.append("\n");
             // сумма в конце шага («...: 5,40 ₽») - жирным
             if (!quoted.isEmpty()) sb.append("<blockquote>")
-                    .append(escape(String.join("\n", quoted)).replaceAll("(?m): (\\d+(?:,\\d{2})? ₽)$", ": <b>$1</b>"))
+                    .append(escape(String.join("\n", quoted)).replaceAll("(?m): (\\d+(?:,\\d{2})? ₽)$", ": <b>$1</b>")
+                            .replaceAll("(\\d+(?:,\\d{2})? ₽)(?= из (?:России|других стран))", "<b>$1</b>"))
                     .append("</blockquote>\n");
             for (String line : money) sb.append("\n").append(escape(line)).append("\n");
             for (String line : ads) sb.append("\n<i>").append(escape(line)).append("</i>\n");

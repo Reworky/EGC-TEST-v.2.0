@@ -202,9 +202,9 @@ public class PostbackController {
             return ResponseEntity.status(403).body("forbidden");
         }
         // subid = Telegram ID игрока, offer = ключ оффера квеста (rodina, sacralium), id = ID действия в сети (для лога). Размер выплаты лендинг уже проверил.
-        if ("sacralium1".equals(params.get("offer"))) {   // промежуточный этап: начисление без закрытия квеста
+        if ("sacralium1".equals(params.get("offer")) || "sacralium1_ru".equals(params.get("offer"))) {   // промежуточный этап: начисление без закрытия квеста
             try {
-                return ResponseEntity.ok(gameStageRewardService.paySacraliumStage1(params.get("subid")));
+                return ResponseEntity.ok(gameStageRewardService.paySacraliumStage1(params.get("subid"), "sacralium1_ru".equals(params.get("offer"))));
             } catch (Exception e) {
                 log.error("[LandingOffer] sacralium stage 1 failed, subid={}", params.get("subid"), e);
                 return ResponseEntity.ok("error");

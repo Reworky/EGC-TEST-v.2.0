@@ -22,13 +22,15 @@ import ru.gamebot.platform.domain.repository.QuestRepository;
 @Service
 public class GameStageRewardService {
 
-    /** Этап 1 Sacralium: 700 EXCASH = 7 ₽ (≈30% нижней выплаты 24,60 ₽). */
-    public static final long SACRALIUM_STAGE1_EXC = 700L;
+    /** Этап 1 Sacralium, по 30% выплаты: Россия 49,20 ₽ - игроку 14,76 ₽, остальные страны 24,60 ₽ - 7,38 ₽ (100 EXCASH = 1 ₽). */
+    public static final long SACRALIUM_STAGE1_EXC = 738L;
+    public static final long SACRALIUM_STAGE1_RU_EXC = 1_476L;
 
     /** Доплата за игрока из России: сеть платит за него больше. Награда квеста - 30% выплаты за другие страны, доплата доводит до 30% выплаты за Россию (100 EXCASH = 1 ₽). */
     public record RussiaExtra(String gameName, long exc) {}
 
     public static final java.util.Map<String, RussiaExtra> RUSSIA_EXTRAS = java.util.Map.of(
+            "sacralium", new RussiaExtra("Sacralium", 9_834L),             // этап 2: 655,70 ₽ против 327,90 ₽: 196,71 ₽ и 98,37 ₽
             "pathofdoom", new RussiaExtra("Путь Судьбы", 1_800L),          // 120 ₽ против 60 ₽: 36 ₽ и 18 ₽
             "demonslayer", new RussiaExtra("Охотник на Демонов", 960L),    // 96 ₽ против 64 ₽: 28,80 ₽ и 19,20 ₽
             "jade", new RussiaExtra("Нефритовое Царство", 720L),           // 80 ₽ против 56 ₽: 24 ₽ и 16,80 ₽
@@ -202,7 +204,7 @@ public class GameStageRewardService {
     }
 
     /** Ответ для лендинга: «ok» - начислено сейчас или раньше; любой другой текст - автовыдача не прошла, запись остаётся в списке конверсий. */
-    public String paySacraliumStage1(String subid) {
+    public String paySacraliumStage1(String subid, boolean russia) {
         long telegramId;
         try {
             telegramId = Long.parseLong(String.valueOf(subid).trim());
@@ -216,12 +218,16 @@ public class GameStageRewardService {
             return "no active quest for this offer";
         }
         String key = "gamestage.sacralium.1." + found.getId();
-        boolean paidNow = payOnce(found.getId(), key, SACRALIUM_STAGE1_EXC, "Sacralium: этап 1, активный игрок");
+        long amount = russia ? SACRALIUM_STAGE1_RU_EXC : SACRALIUM_STAGE1_EXC;
+        boolean paidNow = payOnce(found.getId(), key, amount, "Sacralium: этап 1, активный игрок");
         if (paidNow) {
             try {
-                bot.caseAutoNotify(telegramId, "✅ <b>Sacralium: первый этап пройден</b>\n\n💰 <b>+7 ₽</b>: начислили 700 "
+                // сумма второго этапа: награда квеста, для России плюс доплата
+                long secondStage = questRepository.findFirstByExternalAutoApproveTrueAndActiveTrueAndExternalNetworkAndExternalOfferId("landing", "sacralium")
+                        .map(q -> q.getRewardCoins() + (russia ? RUSSIA_EXTRAS.get("sacralium").exc() : 0L)).orElse(0L);
+                bot.caseAutoNotify(telegramId, "✅ <b>Sacralium: первый этап пройден</b>\n\n💰 <b>+" + rubWithKopecks(amount) + " ₽</b>: начислили " + amount + " "
                         + (sponsorBalanceService.enabled() ? "EXCASH, они выводятся в рубли без лимитов." : "EXC.")
-                        + "\n\nИграй дальше: за второй этап ещё <b>100 ₽</b>.", null);
+                        + (secondStage > 0 ? "\n\nИграй дальше: за второй этап ещё <b>" + rubWithKopecks(secondStage) + " ₽</b>." : ""), null);
             } catch (Exception e) {
                 log.warn("[GameStage] notice failed for {}", telegramId, e);
             }
