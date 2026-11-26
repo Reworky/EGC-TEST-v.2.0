@@ -3246,6 +3246,7 @@ public class QuestSeeder implements CommandLineRunner {
         applyStepsTemplate();
         applyPsbSkinCard();
         applyDebitSkinCards();
+        hideTblackReferralQuest();
         switchOffStarsTyn0xQuest();
     }
 
@@ -3351,6 +3352,25 @@ public class QuestSeeder implements CommandLineRunner {
         a.setKey(key);
         a.setValue(LocalDateTime.now().toString());
         appSettingRepository.save(a);
+    }
+
+    /** 26.11.2026 (владелец): квест «Т-Банк приведи друга» скрыт - у реферальной ссылки банка нет постбека, а карту Black закрывает квест LeadGid «Т-Банк Black».
+     *  Один раз (ключ app_settings): включённый потом вручную квест сидер не трогает. */
+    private void hideTblackReferralQuest() {
+        String key = "quest.tblack.referral.hidden.v1";
+        try {
+            if (appSettingRepository.findById(key).isPresent()) return;
+            ru.gamebot.platform.service.PartnerMission pm = missionByKey("tblack");
+            Quest q = questRepository.findFirstByTitleAndGameName(pm.questTitle(), pm.gameName()).orElse(null);
+            if (q == null) return;
+            long open = questSubmissionRepository.findActiveByQuest(q).size();
+            q.setActive(false);
+            questRepository.save(q);
+            saveSetting(key);
+            log.info("[QuestSeeder] Hidden T-Bank referral quest, open submissions: {}", open);
+        } catch (Exception e) {
+            log.warn("[QuestSeeder] Hiding T-Bank referral quest failed", e);
+        }
     }
 
     private static final String PSB_OLD_TITLE = "Получи 500 ₽ на карту за бесплатную карту ПСБ 🎁";
