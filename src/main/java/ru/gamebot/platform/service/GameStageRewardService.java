@@ -25,6 +25,9 @@ public class GameStageRewardService {
     /** Этап 1 Sacralium: 700 EXCASH = 7 ₽ (≈30% нижней выплаты 24,60 ₽). */
     public static final long SACRALIUM_STAGE1_EXC = 700L;
 
+    /** «Путь Судьбы»: за игрока из России сеть платит вдвое больше (120 ₽ против 60 ₽) - доплата 1 800 EXCASH = ещё 18 ₽ к награде квеста (всего 36 ₽). */
+    public static final long PATHOFDOOM_RU_EXTRA_EXC = 1_800L;
+
     private final AppUserRepository appUserRepository;
     private final AppSettingRepository appSettingRepository;
     private final QuestRepository questRepository;
@@ -47,6 +50,45 @@ public class GameStageRewardService {
         this.tx = new TransactionTemplate(txManager);
     }
 
+    /** Доплата за Россию к уже одобренному квесту «Путь Судьбы»: один раз на игрока. Ответ как у этапа: «ok» - начислено сейчас или раньше. */
+    public String payPathOfDoomRussiaExtra(String subid) {
+        long telegramId;
+        try {
+            telegramId = Long.parseLong(String.valueOf(subid).trim());
+        } catch (NumberFormatException e) {
+            return "bad subaccount";
+        }
+        AppUser found = appUserRepository.findByTelegramId(telegramId).orElse(null);
+        if (found == null) return "user not found";
+        if (payOnce(found.getId(), "gamestage.pathofdoom.ru." + found.getId(), PATHOFDOOM_RU_EXTRA_EXC, "Путь Судьбы: доплата за Россию")) {
+            try {
+                bot.caseAutoNotify(telegramId, "💰 <b>Путь Судьбы: ещё +18 ₽</b>\n\nИгрокам из России награда 36 ₽: доначислили 1 800 "
+                        + (sponsorBalanceService.enabled() ? "EXCASH, они выводятся в рубли без лимитов." : "EXC."), null);
+            } catch (Exception e) {
+                log.warn("[GameStage] notice failed for {}", telegramId, e);
+            }
+        }
+        return "ok";
+    }
+
+    /** Разовое начисление: отметка в app_settings пишется в той же транзакции под блокировкой строки игрока. true - начислено сейчас. */
+    private boolean payOnce(Long userId, String key, long amount, String reason) {
+        return Boolean.TRUE.equals(tx.execute(st -> {
+            AppUser user = appUserRepository.findByIdForUpdate(userId).orElseThrow();
+            if (appSettingRepository.findById(key).isPresent()) return false;
+            if (sponsorBalanceService.enabled()) {
+                excTransactionService.creditSponsor(user, amount, ExcTransactionService.BONUS, reason);
+            } else {
+                userService.addReward(user, 0, amount, ExcTransactionService.BONUS, reason);
+            }
+            AppSetting mark = new AppSetting();
+            mark.setKey(key);
+            mark.setValue(LocalDateTime.now().toString());
+            appSettingRepository.save(mark);
+            return true;
+        }));
+    }
+
     /** Ответ для лендинга: «ok» - начислено сейчас или раньше; любой другой текст - автовыдача не прошла, запись остаётся в списке конверсий. */
     public String paySacraliumStage1(String subid) {
         long telegramId;
@@ -62,22 +104,8 @@ public class GameStageRewardService {
             return "no active quest for this offer";
         }
         String key = "gamestage.sacralium.1." + found.getId();
-        Boolean paidNow = tx.execute(st -> {
-            AppUser user = appUserRepository.findByIdForUpdate(found.getId()).orElseThrow();
-            if (appSettingRepository.findById(key).isPresent()) return false;
-            String reason = "Sacralium: этап 1, активный игрок";
-            if (sponsorBalanceService.enabled()) {
-                excTransactionService.creditSponsor(user, SACRALIUM_STAGE1_EXC, ExcTransactionService.BONUS, reason);
-            } else {
-                userService.addReward(user, 0, SACRALIUM_STAGE1_EXC, ExcTransactionService.BONUS, reason);
-            }
-            AppSetting mark = new AppSetting();
-            mark.setKey(key);
-            mark.setValue(LocalDateTime.now().toString());
-            appSettingRepository.save(mark);
-            return true;
-        });
-        if (Boolean.TRUE.equals(paidNow)) {
+        boolean paidNow = payOnce(found.getId(), key, SACRALIUM_STAGE1_EXC, "Sacralium: этап 1, активный игрок");
+        if (paidNow) {
             try {
                 bot.caseAutoNotify(telegramId, "✅ <b>Sacralium: первый этап пройден</b>\n\n💰 <b>+7 ₽</b>: начислили 700 "
                         + (sponsorBalanceService.enabled() ? "EXCASH, они выводятся в рубли без лимитов." : "EXC.")

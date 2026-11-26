@@ -2336,7 +2336,7 @@ public class QuestSeeder implements CommandLineRunner {
         }
 
         // ── Игровой оффер: Путь Судьбы (Admitad, Android), 26.11.2026 ──
-        // Одна цель «Первый вход в игру» (60-120 ₽); игроку 1 800 EXCASH = 18 ₽ (≈30% нижней границы). Тестовый лимит рекламодателя - 100, суточный 50 (квестом не ограничивается).
+        // Одна цель «Первый вход в игру»: Россия 120 ₽, остальные страны 60 ₽. Игроку 30%: 18 ₽ - награда квеста, за Россию ещё 18 ₽ доплатой (GameStageRewardService). Тестовый лимит рекламодателя - 100, суточный 50 (квестом не ограничивается).
         gameCatalogService.setDifficultyMode("Путь Судьбы", "FLAT", PATHOFDOOM_REWARD_EXC, 0);
         if (appSettingRepository.findById(PATHOFDOOM_CARD_KEY).isEmpty()) {
             Quest pq = questRepository.findFirstByTitleAndGameName(PATHOFDOOM_TITLE, "Путь Судьбы").orElse(null);
@@ -2356,7 +2356,7 @@ public class QuestSeeder implements CommandLineRunner {
             pq.setDescription("Мобильная MMORPG в мрачном фэнтези-мире. Установи игру на Android и зайди в неё: награду начислим, когда партнёр подтвердит первый вход.");
             pq.setInstruction("Открой страницу игры и установи её:\n"
                     + "https://igro-afisha.pages.dev/?tg={TG_ID}#pathofdoom\n\n"
-                    + "Зайди в игру после установки: без входа партнёр действие не подтвердит.");
+                    + "Зайди в игру после установки: без входа партнёр действие не подтвердит. Награда: 36 ₽ из России, 18 ₽ из других стран.");
             pq.setRequirements("📎 Как получить\n"
                     + "1. Нажми «Взять» и открой страницу игры с телефона на Android.\n"
                     + "2. Установи игру по этой ссылке (установочный файл APK).\n"
@@ -3557,7 +3557,7 @@ public class QuestSeeder implements CommandLineRunner {
 
     private static final String PATHOFDOOM_TITLE = "Путь Судьбы: установи и зайди в игру";
     private static final long PATHOFDOOM_REWARD_EXC = 1_800L;
-    private static final String PATHOFDOOM_CARD_KEY = "pathofdoom.card.v1.done";
+    private static final String PATHOFDOOM_CARD_KEY = "pathofdoom.card.v2.done";   // v2: две суммы по стране
 
     private static final String DRAGONEGG_TITLE = "Яйцо Дракона: зарегистрируйся";
     private static final long DRAGONEGG_REWARD_EXC = 1_400L;

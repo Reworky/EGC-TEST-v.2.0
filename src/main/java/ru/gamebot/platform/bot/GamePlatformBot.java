@@ -11129,7 +11129,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append("🎯 <b>").append(escape(quest.getTitle())).append("</b>\n");
         sb.append(questMetaLine(quest)).append("\n");
         sb.append(activeDeadline.contains("с момента старта") ? "" : activeDeadline).append(statusLine);
-        if ("sacralium".equals(quest.getExternalOfferId())) {
+        if ("pathofdoom".equals(quest.getExternalOfferId())) {
+            // Две суммы по стране (26.11.2026, владелец): сеть платит за Россию вдвое больше
+            long baseRub = Math.round(coins / 100.0);
+            long ruRub = baseRub + ru.gamebot.platform.service.GameStageRewardService.PATHOFDOOM_RU_EXTRA_EXC / 100;
+            sb.append("\n💰 <b>До ").append(fmtExc(ruRub)).append(" ₽</b>: ").append(fmtExc(ruRub)).append(" ₽ игрокам из России, ")
+                    .append(fmtExc(baseRub)).append(" ₽ из других стран\n");
+        } else if ("sacralium".equals(quest.getExternalOfferId())) {
             // Два этапа: сначала рубли (правило владельца), токены называются при начислении
             long stage1Rub = ru.gamebot.platform.service.GameStageRewardService.SACRALIUM_STAGE1_EXC / 100;
             long stage2Rub = Math.round(coins / 100.0);

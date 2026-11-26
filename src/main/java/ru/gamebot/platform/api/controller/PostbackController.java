@@ -210,6 +210,16 @@ public class PostbackController {
                 return ResponseEntity.ok("error");
             }
         }
+        if ("pathofdoom_ru".equals(params.get("offer"))) {   // Россия: обычное одобрение квеста (18 ₽) и разовая доплата ещё 18 ₽
+            ResponseEntity<String> approved = processConversion("landing", params.get("subid"), "pathofdoom", params.get("id"), null);
+            if (!"ok".equals(approved.getBody())) return approved;
+            try {
+                return ResponseEntity.ok(gameStageRewardService.payPathOfDoomRussiaExtra(params.get("subid")));
+            } catch (Exception e) {
+                log.error("[LandingOffer] pathofdoom RU extra failed, subid={}", params.get("subid"), e);
+                return ResponseEntity.ok("extra error");
+            }
+        }
         return processConversion("landing", params.get("subid"), params.get("offer"), params.get("id"), null);
     }
 
