@@ -2297,9 +2297,48 @@ public class QuestSeeder implements CommandLineRunner {
             log.info("[QuestSeeder] Game offer quest created: Нефритовое Царство (landing), reward {} EXC", JADE_REWARD_EXC);
         }
 
+        // ── Игровой оффер: Яйцо Дракона (Admitad, страница-лендинг), 26.11.2026 ──
+        // Одна цель «Регистрация» (48-72 ₽); игроку 1 400 EXCASH = 14 ₽ (≈30% нижней границы). Тестовый лимит рекламодателя - 100 регистраций, суточный 50 (квестом не ограничивается).
+        gameCatalogService.setDifficultyMode("Яйцо Дракона", "FLAT", DRAGONEGG_REWARD_EXC, 0);
+        if (appSettingRepository.findById(DRAGONEGG_CARD_KEY).isEmpty()) {
+            Quest dq = questRepository.findFirstByTitleAndGameName(DRAGONEGG_TITLE, "Яйцо Дракона").orElse(null);
+            if (dq == null) {
+                dq = new Quest();
+                dq.setGameName("Яйцо Дракона");
+                dq.setTitle(DRAGONEGG_TITLE);
+                dq.setParticipantLimit(100);
+                dq.setActive(false);
+                dq.setCreatedAt(LocalDateTime.now());
+            }
+            dq.setPlatform("Браузер");
+            dq.setDurationDays(0);
+            dq.setDurationText("Бессрочно");
+            dq.setRewardXp(0);
+            dq.setRewardCoins(DRAGONEGG_REWARD_EXC);
+            dq.setDescription("Уютная онлайн-игра с приключениями, фермой и кланами. Зарегистрируйся в игре: награду начислим, когда партнёр подтвердит регистрацию.");
+            dq.setInstruction("Открой страницу игры и зарегистрируйся:\n"
+                    + "https://igro-afisha.pages.dev/?tg={TG_ID}#dragonegg\n\n"
+                    + "Нужна новая регистрация именно по этой ссылке.");
+            dq.setRequirements("📎 Как получить\n"
+                    + "1. Нажми «Взять» и открой страницу игры.\n"
+                    + "2. Зарегистрируйся новым аккаунтом по этой ссылке.\n\n"
+                    + "16+. Страны: Россия, Беларусь, Казахстан и другие страны СНГ и Балтии.\n"
+                    + "⏳ Партнёр проверяет регистрацию в среднем 32 дня и подтверждает не все. Рубли начислим в EXCASH, они выводятся без лимитов.\n"
+                    + "Реклама · erid: 2bL9aMPo2e49hMef4piUxfcCAj");
+            dq.setExternalAutoApprove(true);
+            dq.setExternalOfferId("dragonegg");
+            dq.setExternalNetwork("landing");
+            dq.setExternalTargetType("REGISTRATION");
+            dq.setExternalMinPaymentRub(null);
+            questRepository.save(dq);
+            saveSetting(DRAGONEGG_CARD_KEY);
+            log.info("[QuestSeeder] Game offer quest created: Яйцо Дракона (landing), reward {} EXC", DRAGONEGG_REWARD_EXC);
+        }
+
         // 26.11.2026 (владелец: «включи квесты вместе с деплоем»): «Родина РП» и Sacralium включаются один раз; выключенный потом вручную квест сидер обратно не включает
         enableGameOfferOnce(RODINA_TITLE, "Родина РП", "quest.enable.rodina.v1");
         enableGameOfferOnce(SACRALIUM_TITLE, "Sacralium", "quest.enable.sacralium.v1");
+        enableGameOfferOnce(JADE_TITLE, "Нефритовое Царство", "quest.enable.jade.v1");
 
         // Партнёрские (внешние) квесты бессрочные (решение владельца 18.11.2026): срок задаёт Quest.getDurationDays() (0 у всех externalAutoApprove),
         // здесь один раз снимаем дедлайны с уже взятых заявок, иначе они бы отменились старым сроком (WeeklyResetScheduler.cancelExpiredSubmissions)
@@ -3474,6 +3513,10 @@ public class QuestSeeder implements CommandLineRunner {
         saveSetting(key);
         log.info("[QuestSeeder] Game offer quest enabled: {}", gameName);
     }
+
+    private static final String DRAGONEGG_TITLE = "Яйцо Дракона: зарегистрируйся";
+    private static final long DRAGONEGG_REWARD_EXC = 1_400L;
+    private static final String DRAGONEGG_CARD_KEY = "dragonegg.card.v1.done";
 
     private static final String JADE_TITLE = "Нефритовое Царство: зарегистрируйся";
     private static final long JADE_REWARD_EXC = 1_700L;
