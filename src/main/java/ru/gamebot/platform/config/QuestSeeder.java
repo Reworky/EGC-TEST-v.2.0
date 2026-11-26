@@ -2259,7 +2259,7 @@ public class QuestSeeder implements CommandLineRunner {
         }
 
         // ── Игровой оффер: Нефритовое Царство (Admitad, страница-лендинг), 26.11.2026 ──
-        // Одна цель «Регистрация» (56-80 ₽); игроку 1 700 EXCASH = 17 ₽ (≈30% нижней границы). Тестовый лимит рекламодателя - 100 регистраций (отсюда 100 мест),
+        // Одна цель «Регистрация»: Россия 80 ₽, остальные 56 ₽. Игроку 30%: 16,80 ₽ - награда квеста, за Россию доплата до 24 ₽ (GameStageRewardService). Тестовый лимит рекламодателя - 100 регистраций (отсюда 100 мест),
         // суточный лимит 50 лидов квестом не ограничивается. Постбек принимает лендинг. Создаётся НЕАКТИВНЫМ.
         gameCatalogService.setDifficultyMode("Нефритовое Царство", "FLAT", JADE_REWARD_EXC, 0);
         if (appSettingRepository.findById(JADE_CARD_KEY).isEmpty()) {
@@ -2280,7 +2280,7 @@ public class QuestSeeder implements CommandLineRunner {
             jq.setDescription("Браузерная MMORPG по мотивам восточных сказок. Зарегистрируйся в игре: награду начислим, когда партнёр подтвердит регистрацию.");
             jq.setInstruction("Открой страницу игры и зарегистрируйся:\n"
                     + "https://igro-afisha.pages.dev/?tg={TG_ID}#jade\n\n"
-                    + "Нужна новая регистрация именно по этой ссылке.");
+                    + "Нужна новая регистрация именно по этой ссылке. Награда: 24 ₽ из России, 16,80 ₽ из других стран.");
             jq.setRequirements("📎 Как получить\n"
                     + "1. Нажми «Взять» и открой страницу игры.\n"
                     + "2. Зарегистрируйся новым аккаунтом по этой ссылке.\n\n"
@@ -2298,7 +2298,7 @@ public class QuestSeeder implements CommandLineRunner {
         }
 
         // ── Игровой оффер: Яйцо Дракона (Admitad, страница-лендинг), 26.11.2026 ──
-        // Одна цель «Регистрация» (48-72 ₽); игроку 1 400 EXCASH = 14 ₽ (≈30% нижней границы). Тестовый лимит рекламодателя - 100 регистраций, суточный 50 (квестом не ограничивается).
+        // Одна цель «Регистрация»: Россия 72 ₽, остальные 48 ₽. Игроку 30%: 14,40 ₽ - награда квеста, за Россию доплата до 21,60 ₽ (GameStageRewardService). Тестовый лимит рекламодателя - 100 регистраций, суточный 50 (квестом не ограничивается).
         gameCatalogService.setDifficultyMode("Яйцо Дракона", "FLAT", DRAGONEGG_REWARD_EXC, 0);
         if (appSettingRepository.findById(DRAGONEGG_CARD_KEY).isEmpty()) {
             Quest dq = questRepository.findFirstByTitleAndGameName(DRAGONEGG_TITLE, "Яйцо Дракона").orElse(null);
@@ -2318,7 +2318,7 @@ public class QuestSeeder implements CommandLineRunner {
             dq.setDescription("Уютная онлайн-игра с приключениями, фермой и кланами. Зарегистрируйся в игре: награду начислим, когда партнёр подтвердит регистрацию.");
             dq.setInstruction("Открой страницу игры и зарегистрируйся:\n"
                     + "https://igro-afisha.pages.dev/?tg={TG_ID}#dragonegg\n\n"
-                    + "Нужна новая регистрация именно по этой ссылке.");
+                    + "Нужна новая регистрация именно по этой ссылке. Награда: 21,60 ₽ из России, 14,40 ₽ из других стран.");
             dq.setRequirements("📎 Как получить\n"
                     + "1. Нажми «Взять» и открой страницу игры.\n"
                     + "2. Зарегистрируйся новым аккаунтом по этой ссылке.\n\n"
@@ -3640,12 +3640,12 @@ public class QuestSeeder implements CommandLineRunner {
     private static final String DEMONSLAYER_CARD_KEY = "demonslayer.card.v1.done";
 
     private static final String DRAGONEGG_TITLE = "Яйцо Дракона: зарегистрируйся";
-    private static final long DRAGONEGG_REWARD_EXC = 1_400L;
-    private static final String DRAGONEGG_CARD_KEY = "dragonegg.card.v1.done";
+    private static final long DRAGONEGG_REWARD_EXC = 1_440L;
+    private static final String DRAGONEGG_CARD_KEY = "dragonegg.card.v2.done";   // v2: две суммы по стране
 
     private static final String JADE_TITLE = "Нефритовое Царство: зарегистрируйся";
-    private static final long JADE_REWARD_EXC = 1_700L;
-    private static final String JADE_CARD_KEY = "jade.card.v1.done";
+    private static final long JADE_REWARD_EXC = 1_680L;
+    private static final String JADE_CARD_KEY = "jade.card.v2.done";   // v2: две суммы по стране
 
     private static final String SACRALIUM_TITLE = "Sacralium: играй в новую MMORPG";
     private static final long SACRALIUM_REWARD_EXC = 10_000L;

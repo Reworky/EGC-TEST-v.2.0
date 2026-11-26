@@ -210,23 +210,15 @@ public class PostbackController {
                 return ResponseEntity.ok("error");
             }
         }
-        if ("pathofdoom_ru".equals(params.get("offer"))) {   // Россия: обычное одобрение квеста (18 ₽) и разовая доплата ещё 18 ₽
-            ResponseEntity<String> approved = processConversion("landing", params.get("subid"), "pathofdoom", params.get("id"), null);
+        String offer = String.valueOf(params.get("offer"));
+        String ruBase = offer.endsWith("_ru") ? offer.substring(0, offer.length() - 3) : null;
+        if (ruBase != null && ru.gamebot.platform.service.GameStageRewardService.RUSSIA_EXTRAS.containsKey(ruBase)) {   // Россия: обычное одобрение квеста и разовая доплата
+            ResponseEntity<String> approved = processConversion("landing", params.get("subid"), ruBase, params.get("id"), null);
             if (!"ok".equals(approved.getBody())) return approved;
             try {
-                return ResponseEntity.ok(gameStageRewardService.payPathOfDoomRussiaExtra(params.get("subid")));
+                return ResponseEntity.ok(gameStageRewardService.payRussiaExtra(params.get("subid"), ruBase));
             } catch (Exception e) {
-                log.error("[LandingOffer] pathofdoom RU extra failed, subid={}", params.get("subid"), e);
-                return ResponseEntity.ok("extra error");
-            }
-        }
-        if ("demonslayer_ru".equals(params.get("offer"))) {   // Россия: обычное одобрение квеста (19,20 ₽) и разовая доплата 9,60 ₽
-            ResponseEntity<String> approved = processConversion("landing", params.get("subid"), "demonslayer", params.get("id"), null);
-            if (!"ok".equals(approved.getBody())) return approved;
-            try {
-                return ResponseEntity.ok(gameStageRewardService.payDemonSlayerRussiaExtra(params.get("subid")));
-            } catch (Exception e) {
-                log.error("[LandingOffer] demonslayer RU extra failed, subid={}", params.get("subid"), e);
+                log.error("[LandingOffer] {} RU extra failed, subid={}", ruBase, params.get("subid"), e);
                 return ResponseEntity.ok("extra error");
             }
         }

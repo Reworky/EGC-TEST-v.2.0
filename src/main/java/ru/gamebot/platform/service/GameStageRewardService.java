@@ -25,11 +25,19 @@ public class GameStageRewardService {
     /** Этап 1 Sacralium: 700 EXCASH = 7 ₽ (≈30% нижней выплаты 24,60 ₽). */
     public static final long SACRALIUM_STAGE1_EXC = 700L;
 
-    /** «Путь Судьбы»: за игрока из России сеть платит вдвое больше (120 ₽ против 60 ₽) - доплата 1 800 EXCASH = ещё 18 ₽ к награде квеста (всего 36 ₽). */
-    public static final long PATHOFDOOM_RU_EXTRA_EXC = 1_800L;
+    /** Доплата за игрока из России: сеть платит за него больше. Награда квеста - 30% выплаты за другие страны, доплата доводит до 30% выплаты за Россию (100 EXCASH = 1 ₽). */
+    public record RussiaExtra(String gameName, long exc) {}
 
-    /** «Охотник на Демонов»: за игрока из России сеть платит 96 ₽ против 64 ₽ - доплата 960 EXCASH = ещё 9,60 ₽ к награде квеста (всего 28,80 ₽). */
-    public static final long DEMONSLAYER_RU_EXTRA_EXC = 960L;
+    public static final java.util.Map<String, RussiaExtra> RUSSIA_EXTRAS = java.util.Map.of(
+            "pathofdoom", new RussiaExtra("Путь Судьбы", 1_800L),          // 120 ₽ против 60 ₽: 36 ₽ и 18 ₽
+            "demonslayer", new RussiaExtra("Охотник на Демонов", 960L),    // 96 ₽ против 64 ₽: 28,80 ₽ и 19,20 ₽
+            "jade", new RussiaExtra("Нефритовое Царство", 720L),           // 80 ₽ против 56 ₽: 24 ₽ и 16,80 ₽
+            "dragonegg", new RussiaExtra("Яйцо Дракона", 720L));           // 72 ₽ против 48 ₽: 21,60 ₽ и 14,40 ₽
+
+    /** EXCASH в рубли с копейками: 1920 -> «19,20», 1800 -> «18». */
+    public static String rubWithKopecks(long exc) {
+        return exc % 100 == 0 ? String.valueOf(exc / 100) : exc / 100 + "," + String.format("%02d", exc % 100);
+    }
 
     private final AppUserRepository appUserRepository;
     private final AppSettingRepository appSettingRepository;
@@ -53,8 +61,10 @@ public class GameStageRewardService {
         this.tx = new TransactionTemplate(txManager);
     }
 
-    /** Доплата за Россию к уже одобренному квесту «Путь Судьбы»: один раз на игрока. Ответ как у этапа: «ok» - начислено сейчас или раньше. */
-    public String payPathOfDoomRussiaExtra(String subid) {
+    /** Доплата за Россию к уже одобренному игровому квесту: один раз на игрока и игру. Ответ как у этапа: «ok» - начислено сейчас или раньше. */
+    public String payRussiaExtra(String subid, String offerId) {
+        RussiaExtra extra = RUSSIA_EXTRAS.get(offerId);
+        if (extra == null) return "unknown offer";
         long telegramId;
         try {
             telegramId = Long.parseLong(String.valueOf(subid).trim());
@@ -63,31 +73,10 @@ public class GameStageRewardService {
         }
         AppUser found = appUserRepository.findByTelegramId(telegramId).orElse(null);
         if (found == null) return "user not found";
-        if (payOnce(found.getId(), "gamestage.pathofdoom.ru." + found.getId(), PATHOFDOOM_RU_EXTRA_EXC, "Путь Судьбы: доплата за Россию")) {
+        if (payOnce(found.getId(), "gamestage." + offerId + ".ru." + found.getId(), extra.exc(), extra.gameName() + ": доплата за Россию")) {
             try {
-                bot.caseAutoNotify(telegramId, "💰 <b>Путь Судьбы: ещё +18 ₽</b>\n\nИгрокам из России награда 36 ₽: доначислили 1 800 "
-                        + (sponsorBalanceService.enabled() ? "EXCASH, они выводятся в рубли без лимитов." : "EXC."), null);
-            } catch (Exception e) {
-                log.warn("[GameStage] notice failed for {}", telegramId, e);
-            }
-        }
-        return "ok";
-    }
-
-    /** Доплата за Россию к уже одобренному квесту «Охотник на Демонов»: один раз на игрока. Ответ: «ok» - начислено сейчас или раньше. */
-    public String payDemonSlayerRussiaExtra(String subid) {
-        long telegramId;
-        try {
-            telegramId = Long.parseLong(String.valueOf(subid).trim());
-        } catch (NumberFormatException e) {
-            return "bad subaccount";
-        }
-        AppUser found = appUserRepository.findByTelegramId(telegramId).orElse(null);
-        if (found == null) return "user not found";
-        if (payOnce(found.getId(), "gamestage.demonslayer.ru." + found.getId(), DEMONSLAYER_RU_EXTRA_EXC, "Охотник на Демонов: доплата за Россию")) {
-            try {
-                bot.caseAutoNotify(telegramId, "💰 <b>Охотник на Демонов: ещё +9,60 ₽</b>\n\nИгрокам из России награда 28,80 ₽: доначислили 960 "
-                        + (sponsorBalanceService.enabled() ? "EXCASH, они выводятся в рубли без лимитов." : "EXC."), null);
+                bot.caseAutoNotify(telegramId, "💰 <b>" + extra.gameName() + ": ещё +" + rubWithKopecks(extra.exc()) + " ₽</b>\n\nЭто доплата игрокам из России: доначислили "
+                        + extra.exc() + " " + (sponsorBalanceService.enabled() ? "EXCASH, они выводятся в рубли без лимитов." : "EXC."), null);
             } catch (Exception e) {
                 log.warn("[GameStage] notice failed for {}", telegramId, e);
             }

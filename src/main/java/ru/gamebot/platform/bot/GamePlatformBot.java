@@ -11131,13 +11131,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append(activeDeadline.contains("с момента старта") ? "" : activeDeadline).append(statusLine);
         // Макет владельца 26.11.2026: «Награда за квест», суммы цитатой, «Как получить» жирным с шагами в цитате; сроки проверки партнёром не пишем
         List<String> rewards = new ArrayList<>();
-        if ("pathofdoom".equals(quest.getExternalOfferId())) {
-            // Две суммы по стране (26.11.2026, владелец): сеть платит за Россию вдвое больше
-            rewards.add(rubWithKopecks(coins + ru.gamebot.platform.service.GameStageRewardService.PATHOFDOOM_RU_EXTRA_EXC) + " ₽ игрокам из России");
-            rewards.add(rubWithKopecks(coins) + " ₽ из других стран");
-        } else if ("demonslayer".equals(quest.getExternalOfferId())) {
-            // Две суммы по стране, с копейками: ровно 30% от выплаты сети
-            rewards.add(rubWithKopecks(coins + ru.gamebot.platform.service.GameStageRewardService.DEMONSLAYER_RU_EXTRA_EXC) + " ₽ игрокам из России");
+        ru.gamebot.platform.service.GameStageRewardService.RussiaExtra russiaExtra = quest.getExternalOfferId() == null ? null
+                : ru.gamebot.platform.service.GameStageRewardService.RUSSIA_EXTRAS.get(quest.getExternalOfferId());
+        if (russiaExtra != null) {
+            // Две суммы по стране (26.11.2026, владелец): сеть платит за Россию больше
+            rewards.add(rubWithKopecks(coins + russiaExtra.exc()) + " ₽ игрокам из России");
             rewards.add(rubWithKopecks(coins) + " ₽ из других стран");
         } else if ("sacralium".equals(quest.getExternalOfferId())) {
             // Два этапа: сначала рубли (правило владельца), токены называются при начислении
@@ -11270,9 +11268,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    /** EXCASH в рубли с копейками (100 EXCASH = 1 ₽): 1920 -> «19,20», 1800 -> «18». */
+    /** EXCASH в рубли с копейками (100 EXCASH = 1 ₽). */
     private static String rubWithKopecks(long exc) {
-        return exc % 100 == 0 ? String.valueOf(exc / 100) : exc / 100 + "," + String.format("%02d", exc % 100);
+        return ru.gamebot.platform.service.GameStageRewardService.rubWithKopecks(exc);
     }
 
     private String questCardBanner(Quest quest) {
