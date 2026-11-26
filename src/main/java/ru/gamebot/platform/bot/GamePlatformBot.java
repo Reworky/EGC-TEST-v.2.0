@@ -5695,7 +5695,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private static final String[][] WELCOME_SLIDES = {
             {"🎮 <b>Играй и получай EXC</b>\n\n"
-                    + "Бери квесты по своим играм: Brawl Stars, Clash Royale, CS2 и другим.\n\n"
+                    + "Бери квесты по своим играм: CS2, PUBG PC, Brawl Stars, Clash Royale и другим.\n\n"
                     + "За каждый засчитанный квест приходят EXC и опыт."},
             {"💸 <b>EXC превращаются в реальные вещи</b>\n\n"
                     + "Выводи на карту, в звёзды Telegram или трать в магазине наград на донат для своей игры."},
