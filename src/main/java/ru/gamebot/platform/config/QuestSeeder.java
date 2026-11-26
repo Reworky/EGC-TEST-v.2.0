@@ -2258,6 +2258,45 @@ public class QuestSeeder implements CommandLineRunner {
             log.info("[QuestSeeder] Game offer quest created: Sacralium (landing), stage 2 reward {} EXC", SACRALIUM_REWARD_EXC);
         }
 
+        // ── Игровой оффер: Нефритовое Царство (Admitad, страница-лендинг), 26.11.2026 ──
+        // Одна цель «Регистрация» (56-80 ₽); игроку 1 700 EXCASH = 17 ₽ (≈30% нижней границы). Тестовый лимит рекламодателя - 100 регистраций (отсюда 100 мест),
+        // суточный лимит 50 лидов квестом не ограничивается. Постбек принимает лендинг. Создаётся НЕАКТИВНЫМ.
+        gameCatalogService.setDifficultyMode("Нефритовое Царство", "FLAT", JADE_REWARD_EXC, 0);
+        if (appSettingRepository.findById(JADE_CARD_KEY).isEmpty()) {
+            Quest jq = questRepository.findFirstByTitleAndGameName(JADE_TITLE, "Нефритовое Царство").orElse(null);
+            if (jq == null) {
+                jq = new Quest();
+                jq.setGameName("Нефритовое Царство");
+                jq.setTitle(JADE_TITLE);
+                jq.setParticipantLimit(100);
+                jq.setActive(false);
+                jq.setCreatedAt(LocalDateTime.now());
+            }
+            jq.setPlatform("Браузер");
+            jq.setDurationDays(0);
+            jq.setDurationText("Бессрочно");
+            jq.setRewardXp(0);
+            jq.setRewardCoins(JADE_REWARD_EXC);
+            jq.setDescription("Браузерная MMORPG по мотивам восточных сказок. Зарегистрируйся в игре: награду начислим, когда партнёр подтвердит регистрацию.");
+            jq.setInstruction("Открой страницу игры и зарегистрируйся:\n"
+                    + "https://igro-afisha.pages.dev/?tg={TG_ID}#jade\n\n"
+                    + "Нужна новая регистрация именно по этой ссылке.");
+            jq.setRequirements("📎 Как получить\n"
+                    + "1. Нажми «Взять» и открой страницу игры.\n"
+                    + "2. Зарегистрируйся новым аккаунтом по этой ссылке.\n\n"
+                    + "Страны: Россия, Беларусь, Казахстан и другие страны СНГ и Балтии.\n"
+                    + "⏳ Партнёр проверяет регистрацию в среднем 36 дней и подтверждает не все. Рубли начислим в EXCASH, они выводятся без лимитов.\n"
+                    + "Реклама · erid: 2bL9aMPo2e49hMef4phyrH4SW3");
+            jq.setExternalAutoApprove(true);
+            jq.setExternalOfferId("jade");
+            jq.setExternalNetwork("landing");
+            jq.setExternalTargetType("REGISTRATION");
+            jq.setExternalMinPaymentRub(null);
+            questRepository.save(jq);
+            saveSetting(JADE_CARD_KEY);
+            log.info("[QuestSeeder] Game offer quest created: Нефритовое Царство (landing), reward {} EXC", JADE_REWARD_EXC);
+        }
+
         // 26.11.2026 (владелец: «включи квесты вместе с деплоем»): «Родина РП» и Sacralium включаются один раз; выключенный потом вручную квест сидер обратно не включает
         enableGameOfferOnce(RODINA_TITLE, "Родина РП", "quest.enable.rodina.v1");
         enableGameOfferOnce(SACRALIUM_TITLE, "Sacralium", "quest.enable.sacralium.v1");
@@ -3435,6 +3474,10 @@ public class QuestSeeder implements CommandLineRunner {
         saveSetting(key);
         log.info("[QuestSeeder] Game offer quest enabled: {}", gameName);
     }
+
+    private static final String JADE_TITLE = "Нефритовое Царство: зарегистрируйся";
+    private static final long JADE_REWARD_EXC = 1_700L;
+    private static final String JADE_CARD_KEY = "jade.card.v1.done";
 
     private static final String SACRALIUM_TITLE = "Sacralium: играй в новую MMORPG";
     private static final long SACRALIUM_REWARD_EXC = 10_000L;
