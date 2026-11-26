@@ -111,6 +111,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private static final Map<String, String> INTEREST_OPTIONS = new LinkedHashMap<>();
     private volatile String shopBannerFileId = null;
     private final ru.gamebot.platform.service.Cs2CaseAutoIssueService cs2CaseAutoIssueService;
+    private final ru.gamebot.platform.service.QuestSkinService questSkinService;
     private volatile String hallOfFameFileId = null;
     private volatile String botActivationInviteLink = null;
 
@@ -899,6 +900,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + "Награда за квест: <b>" + flatXp + " XP / " + flatExc + " EXC</b>\n"
                             + "Обновлено квестов: <b>" + updated + "</b>", null);
             sendAdminQuestCategories(user, gameName);
+            return;
+        }
+
+        // Скин-награда за квест (ПСБ): ссылку обмена Steam принимаем вне любого другого ввода - переживает перезапуск бота
+        if (session.getState() == SessionState.NONE && message.hasText() && questSkinService.submitLink(user.getTelegramId(), message.getText())) {
             return;
         }
 
@@ -1869,6 +1875,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (data.equals("shop:ranks")) {
             answerSilently(callbackQuery.getId());
             sendRanksTable(user, "shop:withdraw");
+            return;
+        }
+        if (data.startsWith("qskin:other:")) {
+            Long skinRewardId = parseLong(data.substring("qskin:other:".length()));
+            if (skinRewardId != null) questSkinService.wantOther(user.getTelegramId(), skinRewardId);
             return;
         }
         if (data.equals("spwd:start") || data.equals("spwd:menu")) {
@@ -9074,7 +9085,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("ugcpilot", "status|start|stop", "Пилот «UGC в EXCASH»: от 500 просмотров платим EXCASH с удержанием 3 дня, бюджет 300 000 EXCASH (3 000 ₽), граница 100 000 EXCASH в сутки на игрока, срок 14 дней; status - расход и остаток, start - запустить, stop - остановить"),
             new AdminCommand("tocash", "ID сумма", "Перенести EXC с игрового баланса на спонсорский (EXCASH) 1 к 1, для игроков, которые просят перенести старые спонсорские заработки. Одна транзакция, оба баланса показываются в ответе"),
             new AdminCommand("wowpay", "ID [rodina]", "Награда за игровой квест (по умолчанию World of Warships, с «rodina» - Родина РП): игрок есть в списке конверсий лендинга (партнёр подтвердил игру). Начисляет награду квеста и уведомляет игрока; повторно тому же игроку не начисляет"),
-            new AdminCommand("psbbonus", "ID [повтор|карта|отказ]", "Выплата ПСБ (карта «Твой кэшбэк») после подтверждения банка: начисляет игроку 💎 50 000 EXCASH (≈ 500 ₽, награда клуба; плюс компенсация траты, если она есть), переводить деньги не нужно. Слово «карта» - прежний ручной перевод рублями без EXCASH, «отказ» - банк не подтвердил карту (игроку уйдёт сообщение, ожидание снимется), «повтор» - повторная выплата"),
+            new AdminCommand("psbbonus", "ID [повтор|отказ]", "Квест ПСБ (награда - скин AK-47): обычно не нужна, скин выдаётся автоматически после постбека LeadGid. Нужна, только если скин купили вручную: начислит компенсацию траты и отметит выплату. «отказ» - банк не подтвердил карту, «повтор» - повторная выплата"),
             new AdminCommand("ubrrbonus", "ID [повтор|карта|отказ]", "Выплата УБРиР (карта «Моя Жизнь») после подтверждения банка: начисляет игроку 💎 50 000 EXCASH (≈ 500 ₽, награда клуба; плюс компенсация траты, если она есть), переводить деньги не нужно. Слово «карта» - прежний ручной перевод рублями без EXCASH, «отказ» - банк не подтвердил карту (игроку уйдёт сообщение, ожидание снимется), «повтор» - повторная выплата"),
             new AdminCommand("sovcombonus", "ID [повтор|карта|отказ]", "Выплата Совкомбанк (кредитная карта 180 дней без %) после подтверждения банка: начисляет игроку 💎 150 000 EXCASH (≈ 1500 ₽, награда клуба; плюс компенсация траты, если она есть), переводить деньги не нужно. Слово «карта» - прежний ручной перевод рублями без EXCASH, «отказ» - банк не подтвердил карту (игроку уйдёт сообщение, ожидание снимется), «повтор» - повторная выплата"),
             new AdminCommand("otpcreditbonus", "ID [повтор|карта|отказ]", "Выплата ОТП Банк (кредитная карта 120 дней без %) после подтверждения банка: начисляет игроку 💎 150 000 EXCASH (≈ 1500 ₽, награда клуба), переводить деньги не нужно. Слово «карта» - прежний ручной перевод рублями без EXCASH, «отказ» - банк не подтвердил карту (игроку уйдёт сообщение, ожидание снимется), «повтор» - повторная выплата"),
@@ -10595,6 +10606,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             // 15.11.2026 (владелец): «Что ты получаешь» и «Как это работает» - раскрывающиеся цитаты. Заголовок «Как это работает:» из конца описания уходит в цитату с шагами ниже.
             desc = desc.replaceAll("(?s)\\n*Как это работает:[ \\t]*\\n*$", "");
             desc = collapseSponsorSections(desc);
+            desc = desc.replaceAll("(?m)(Уже есть такой\\? [^\\n<]*)", "<i>$1</i>");
             sb.append("\n").append(desc).append("\n");
         }
         List<String[]> steps = splitQuestBlocks(instruction);
@@ -27819,12 +27831,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (c.getPayout() != null) sb.append(", выплата нам: ").append(escape(c.getPayout())).append(" ₽");
             if (c.getExternalId() != null) sb.append("\n🆔 Конверсия: ").append(escape(c.getExternalId()));
             if ("UNKNOWN".equals(norm) || sub == null) sb.append("\n\n<i>Параметры постбека:</i> <code>").append(escape(String.valueOf(c.getRaw()))).append("</code>");
-            if ("APPROVED".equals(norm) && pm != null) sb.append("\n\nМожно начислить награду игроку кнопкой ниже.");
+            // Квест со скином-наградой (ПСБ): по подтверждённому постбеку скин открывается автоматически, ручная кнопка - только если автозапуск не прошёл
+            boolean skinStarted = false;
+            if (sub != null && ru.gamebot.platform.service.QuestSkinService.isSkinQuest(pm)) {
+                ru.gamebot.platform.service.QuestSkinService.Result skin = questSkinService.onConversion(c, sub, pm);
+                skinStarted = skin.started();
+                if (skin.adminNote() != null) sb.append("\n\n").append(skin.adminNote());
+            }
+            final boolean manualPayoutOffered = "APPROVED".equals(norm) && pm != null && !skinStarted;
+            if (manualPayoutOffered) sb.append("\n\nМожно начислить награду игроку кнопкой ниже.");
             if ("PENDING".equals(norm)) sb.append("\n\nБанк ещё проверяет: награду начислять рано.");
             if ("REJECTED".equals(norm) && pm != null) sb.append("\n\nНаграду не начислять. Игроку об отказе можно сообщить командой /").append(pm.bonusCommand()).append(" ").append(sub.getUser().getTelegramId()).append(" отказ");
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
             if (sub != null) {
-                if ("APPROVED".equals(norm) && pm != null) rows.add(List.of(keyboardFactory.callback("💎 Начислить награду", "mod:pbonus:" + sub.getId())));
+                if (manualPayoutOffered) rows.add(List.of(keyboardFactory.callback("💎 Начислить награду", "mod:pbonus:" + sub.getId())));
                 rows.add(List.of(keyboardFactory.callback("📥 Карточка заявки", "mod:view:" + sub.getId())));
             }
             InlineKeyboardMarkup markup = rows.isEmpty() ? null : keyboardFactory.rowsLayout(rows);
@@ -32362,6 +32382,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Сообщения автовыдачи кейсов CS2 (Cs2CaseAutoIssueService): игроку (если userText задан) и/или всем админам (если adminText задан). Тексты в HTML. */
+    public void questSkinAskLink(Long telegramId, Long rewardId, String text) {
+        try {
+            sendText(telegramId, text, keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("🔄 Хочу другой скин", "qskin:other:" + rewardId)))));
+        } catch (Exception e) {
+            log.warn("[QuestSkin] link request failed for {}", telegramId, e);
+        }
+    }
+
     public void caseAutoNotify(Long userTelegramId, String userText, String adminText) {
         if (userTelegramId != null && userText != null) {
             sendText(userTelegramId, userText, null);

@@ -401,6 +401,16 @@ public class Cs2CaseAutoIssueService {
         }
     }
 
+    /** Ключ маркетплейса задан (для скина-награды за квест открытость кейсов не нужна). */
+    public boolean isMarketConfigured() {
+        return !apiKey.isEmpty();
+    }
+
+    /** Вызов API маркетплейса для других выдач (скин за квест): общий ограничитель частоты запросов. */
+    public JsonNode marketCall(String method, Map<String, String> params) {
+        return call(method, params);
+    }
+
     /** GET к API маркетплейса; null - нет ответа или не JSON. Ключ в логи не попадает. */
     private JsonNode call(String method, Map<String, String> params) {
         try {

@@ -2625,7 +2625,8 @@ public class QuestSeeder implements CommandLineRunner {
         // ── Партнёрская миссия «ПСБ Твой кэшбэк», 17.11.2026 (владелец: 500 ₽): банк клиенту не платит, клуб платит 500 ₽ на карту лично (вручную менеджером) после подтверждения банка;
         // 50 мест; без статуса партнёра; активна сразу. Тексты и числа миссии - в PartnerMissions.PSB. Создаётся один раз (дальше правки только из админки).
         ru.gamebot.platform.service.PartnerMission psb = ru.gamebot.platform.service.PartnerMissions.PSB;
-        if (questRepository.findFirstByTitleAndGameName(psb.questTitle(), psb.gameName()).isEmpty()) {
+        if (questRepository.findFirstByTitleAndGameName(psb.questTitle(), psb.gameName()).isEmpty()
+                && questRepository.findFirstByTitleAndGameName(PSB_OLD_TITLE, psb.gameName()).isEmpty()) {
             Quest psbQuest = new Quest();
             psbQuest.setGameName(psb.gameName());
             psbQuest.setTitle(psb.questTitle());
@@ -3240,7 +3241,51 @@ public class QuestSeeder implements CommandLineRunner {
         applyManagerProofTexts();
         applyManagerProofHeaders();
         applyStepsTemplate();
+        applyPsbSkinCard();
         switchOffStarsTyn0xQuest();
+    }
+
+    private static final String PSB_OLD_TITLE = "Получи 500 ₽ на карту за бесплатную карту ПСБ 🎁";
+
+    /** ПСБ (26.11.2026, владелец): вместо 500 ₽ награда - скин AK-47 | Searing Rage; квест заменяется на месте (карту по нему ещё никто не заказывал).
+     *  Скин выдаётся автоматически после постбека партнёра (QuestSkinService). Текст карточки - владельца. Один раз (ключ app_settings). */
+    private void applyPsbSkinCard() {
+        String key = "quest.psb.skin.v1";
+        try {
+            if (appSettingRepository.findById(key).isPresent()) return;
+            ru.gamebot.platform.service.PartnerMission psb = ru.gamebot.platform.service.PartnerMissions.PSB;
+            Quest q = questRepository.findFirstByTitleAndGameName(PSB_OLD_TITLE, psb.gameName())
+                    .or(() -> questRepository.findFirstByTitleAndGameName(psb.questTitle(), psb.gameName())).orElse(null);
+            if (q == null) return;
+            q.setTitle(psb.questTitle());
+            q.setDescription("Что ты получаешь:\n"
+                    + "✅ Скин AK-47 | Searing Rage (Minimal Wear) в Steam\n"
+                    + "Уже есть такой? Выбери любой другой скин до 500 ₽.\n"
+                    + "✅ +50 000 EXC на баланс: компенсация траты 1 000 ₽ на покупку\n"
+                    + "✅ Приветственный кэшбэк 25% от банка за первые 30 дней (баллами, до 1 000)\n"
+                    + "✅ Бесплатное обслуживание карты навсегда\n\n"
+                    + "🔒 Паспорт, коды из СМС и номер карты нам не нужны.\n\n"
+                    + "Как это работает:");
+            q.setInstruction("1️⃣ Оформи заявку на карту онлайн\n"
+                    + "После «Взять» появится кнопка «Оформить карту». Оформляй именно по этой ссылке и без VPN.\n\n"
+                    + "2️⃣ Оплати покупку от 1 000 ₽\n"
+                    + "Одна покупка этой картой. Пополнение карты, переводы и снятие наличных не считаются.\n\n"
+                    + "3️⃣ Пришли подтверждение менеджеру\n"
+                    + "Пришли менеджеру в личку скриншоты карты и покупки (номера карты и счёта закрой).\n\n"
+                    + "4️⃣ Получи скин в Steam\n"
+                    + "Когда банк подтвердит карту, бот попросит ссылку обмена Steam и отправит скин. На баланс придёт компенсация траты.");
+            q.setRequirements("ℹ️ Кому подходит\n"
+                    + "Тебе 18+, у тебя паспорт РФ и за последние 6 месяцев не было карты ПСБ. Заявки из ДНР, ЛНР, Херсонской и Запорожской областей банк не засчитывает. "
+                    + "Банк клиенту денег за карту не платит: скин даёт клуб. Для скина нужен Steam с открытыми обменами и ссылка на обмен. Условия обслуживания и кэшбэка определяет банк.");
+            questRepository.save(q);
+            ru.gamebot.platform.domain.model.AppSetting done = new ru.gamebot.platform.domain.model.AppSetting();
+            done.setKey(key);
+            done.setValue(LocalDateTime.now().toString());
+            appSettingRepository.save(done);
+            log.info("[QuestSeeder] PSB quest switched to skin reward");
+        } catch (Exception e) {
+            log.warn("[QuestSeeder] PSB skin card failed", e);
+        }
     }
 
     /** Ключ app_settings: квест «Подписаться на канал - t.me/stars_tyn0x» выключен (15.11.2026, владелец: «должен быть выключен везде в проекте»). */
