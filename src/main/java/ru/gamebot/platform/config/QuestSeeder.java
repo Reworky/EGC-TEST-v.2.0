@@ -2174,7 +2174,7 @@ public class QuestSeeder implements CommandLineRunner {
         // ── Игровой оффер: Родина РП (Admitad, страница-лендинг) ─────────────────────
         // 24.11.2026 (решение владельца): квест по образцу World of Warships. Постбек Admitad принимает ЛЕНДИНГ (/api/postback-admitad), бот про сеть ничего не знает;
         // подтверждённых игроков админ видит в списке конверсий лендинга и начисляет награду командой /wowpay ID rodina.
-        // Цель (решение владельца 24.11.2026): «Активный игрок» = 24 ₽ у Admitad, без платежей игрока. Награда 30% выплаты = 7,2 ₽ ≈ 720 EXC (курс проекта 100 EXC = 1 ₽).
+        // С 26.11.2026 (карточка одобрена владельцем) оплачиваются четыре шага по 30% выплаты: билет и организация по 5,40 ₽, активный игрок 7,20 ₽, пополнение (по желанию) 36 ₽; всего 54 ₽.
         // ВНИМАНИЕ: правила оффера запрещают мотивированный трафик; запуск - на риск владельца. Квест создаётся НЕАКТИВНЫМ до включения («Управление квестами → Включить»).
         gameCatalogService.setDifficultyMode("Родина РП", "FLAT", RODINA_REWARD_EXC, 0);
         Quest rodinaQuest = questRepository.findFirstByTitleAndGameName(RODINA_TITLE, "Родина РП")
@@ -2194,15 +2194,19 @@ public class QuestSeeder implements CommandLineRunner {
             rodinaQuest.setDurationText("Бессрочно");
             rodinaQuest.setRewardXp(0);
             rodinaQuest.setRewardCoins(RODINA_REWARD_EXC);
-            rodinaQuest.setDescription("Ролевая онлайн-игра: создай персонажа, найди работу и живи в открытом мире. Открой страницу игры, установи её, зарегистрируйся и поиграй, пока партнёр не засчитает тебя активным игроком: награду начислим после подтверждения партнёра.");
+            rodinaQuest.setDescription("Ролевая онлайн-игра с открытым миром. Проходи шаги в игре: за каждый засчитанный шаг своя награда.");
             rodinaQuest.setInstruction("Открой страницу игры, скачай её и зарегистрируйся:\n"
                     + "https://igro-afisha.pages.dev/?tg={TG_ID}#rodina\n\n"
-                    + "Запусти игру и поиграй: если игру не запускали, партнёр активного игрока не подтвердит.");
+                    + "Дальше проходи шаги: военный билет (5,40 ₽), вступление в организацию (5,40 ₽), активный игрок (7,20 ₽). "
+                    + "По желанию: первое пополнение больше 100 ₽ своими деньгами (36 ₽).");
             rodinaQuest.setRequirements("📎 Как получить\n"
-                    + "1. Нажми «Взять» и открой страницу игры.\n"
-                    + "2. Скачай игру и зарегистрируйся.\n"
-                    + "3. Запусти игру и активно поиграй.\n\n"
-                    + "💰 Рубли начислим в EXCASH, они выводятся без лимитов.\n"
+                    + "1. Нажми «Взять», открой страницу игры и зарегистрируйся: без награды\n"
+                    + "2. Получи в игре военный билет: 5,40 ₽\n"
+                    + "3. Вступи в организацию: 5,40 ₽\n"
+                    + "4. Стань активным игроком: 7,20 ₽\n"
+                    + "5. По желанию: первое пополнение больше 100 ₽ своими деньгами: 36 ₽\n"
+                    + "Без пополнения можно получить 18 ₽.\n\n"
+                    + "💰 Каждый шаг начисляем отдельно, после подтверждения партнёра. Рубли начислим в EXCASH, они выводятся без лимитов.\n"
                     + "Реклама · erid: 2bL9aMPo2e49hMef4rqUtWH3qT");
             rodinaQuest.setExternalAutoApprove(true);
             rodinaQuest.setExternalOfferId("rodina");
@@ -3730,8 +3734,8 @@ public class QuestSeeder implements CommandLineRunner {
     /** Родина РП (Admitad): название квеста, награда (EXC), ключ app_settings одноразовой записи (24.11.2026). */
     private static final String RODINA_TITLE = "Родина РП: зарегистрируйся и поиграй";
     private static final String RODINA_TITLE_OLD = "Родина РП: зарегистрируйся и пополни";
-    private static final long RODINA_REWARD_EXC = 720L;
-    private static final String RODINA_CARD_KEY = "rodina.card.v2.done";
+    private static final long RODINA_REWARD_EXC = 5_400L;   // сумма всех шагов (GameStageRewardService.RODINA_STAGES); начисляется по шагам
+    private static final String RODINA_CARD_KEY = "rodina.card.v3.done";   // v3: пошаговый план (26.11.2026)
     private static final String WOW_CARD_V2_KEY = "wows.card.v6.done";   // v6 (19.11.2026): ссылка на лендинг igro-afisha.pages.dev; v3: из условий убрана фраза про отчёт; v4 (18.11.2026): квест бессрочный, у взятых заявок сняты дедлайны
 
     /** Ключ app_settings: скрытие всех спонсорских квестов, кроме банка ОТП, выполнено (15.11.2026). */

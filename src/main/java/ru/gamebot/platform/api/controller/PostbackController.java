@@ -211,6 +211,15 @@ public class PostbackController {
             }
         }
         String offer = String.valueOf(params.get("offer"));
+        if (offer.equals("rodina") || offer.startsWith("rodina_")) {   // «Родина РП»: каждый шаг оплачивается отдельно; «rodina» без шага - прежнее имя цели «Активный игрок»
+            try {
+                return ResponseEntity.ok(gameStageRewardService.payRodinaStage(params.get("subid"),
+                        offer.equals("rodina") ? "active" : offer.substring("rodina_".length()), params.get("id")));
+            } catch (Exception e) {
+                log.error("[LandingOffer] {} failed, subid={}", offer, params.get("subid"), e);
+                return ResponseEntity.ok("error");
+            }
+        }
         String ruBase = offer.endsWith("_ru") ? offer.substring(0, offer.length() - 3) : null;
         if (ruBase != null && ru.gamebot.platform.service.GameStageRewardService.RUSSIA_EXTRAS.containsKey(ruBase)) {   // Россия: обычное одобрение квеста и разовая доплата
             ResponseEntity<String> approved = processConversion("landing", params.get("subid"), ruBase, params.get("id"), null);

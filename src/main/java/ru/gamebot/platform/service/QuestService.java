@@ -1488,9 +1488,20 @@ public class QuestService {
         return approveSubmission(submissionId, null);
     }
 
+    /** Квест с отдельной оплатой каждого шага («Родина РП»): последний шаг закрывает квест обычным одобрением, но начисляет только свою сумму,
+     *  а не всю награду квеста (прошлые шаги уже оплачены по отдельности). */
+    @Transactional
+    public QuestSubmission approveStagedSubmission(Long submissionId, long lastStageCoins) {
+        return approve(submissionId, null, lastStageCoins);
+    }
+
     /** viewsTier - ступень просмотров UGC-квеста (см. UGC_VIEW_TIER_COINS); null = обычная награда квеста. */
     @Transactional
     public QuestSubmission approveSubmission(Long submissionId, Integer viewsTier) {
+        return approve(submissionId, viewsTier, null);
+    }
+
+    private QuestSubmission approve(Long submissionId, Integer viewsTier, Long baseOverride) {
         QuestSubmission submission = getSubmission(submissionId);
         if (submission.getStatus() == SubmissionStatus.APPROVED) {
             return submission;
@@ -1501,7 +1512,7 @@ public class QuestService {
 
         // Считаем награду ДО смены статуса на APPROVED, чтобы Hibernate-flush не включил
         // текущую заявку в COUNT-запрос и не сбил счётчик недельного лимита
-        RewardPreview reward = computeReward(user, quest, ugcTierCoins(quest, viewsTier));
+        RewardPreview reward = computeReward(user, quest, baseOverride != null ? baseOverride : ugcTierCoins(quest, viewsTier));
         long adjustedCoins = reward.coins();
         long adjustedXp = reward.xp();
         // Подписка на канал спонсора: часть EXC удерживается до проверки «остался в канале» (см. releaseHeldReward / forfeitHeldReward).

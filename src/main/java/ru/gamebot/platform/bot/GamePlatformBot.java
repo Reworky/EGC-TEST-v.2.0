@@ -190,6 +190,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.SponsorService sponsorService;
     private final ru.gamebot.platform.service.ExcTransactionService excTransactionService;
     private final ru.gamebot.platform.service.SponsorBalanceService sponsorBalanceService;
+    private final ru.gamebot.platform.service.GameStageRewardService gameStageRewardService;
     private final ru.gamebot.platform.service.UgcPilotService ugcPilotService;
     private final ru.gamebot.platform.service.SquadService squadService;
     private final ru.gamebot.platform.service.WheelService wheelService;
@@ -9097,7 +9098,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("excash", "ID [±сумма] [уведомить] [причина]", "Спонсорский баланс EXCASH: без суммы - показать игровой и спонсорский баланс игрока; +сумма - начислить EXCASH, -сумма - списать (ниже нуля нельзя); слово «уведомить» отправляет игроку сообщение о начислении"),
             new AdminCommand("ugcpilot", "status|start|stop", "Пилот «UGC в EXCASH»: от 500 просмотров платим EXCASH с удержанием 3 дня, бюджет 300 000 EXCASH (3 000 ₽), граница 100 000 EXCASH в сутки на игрока, срок 14 дней; status - расход и остаток, start - запустить, stop - остановить"),
             new AdminCommand("tocash", "ID сумма", "Перенести EXC с игрового баланса на спонсорский (EXCASH) 1 к 1, для игроков, которые просят перенести старые спонсорские заработки. Одна транзакция, оба баланса показываются в ответе"),
-            new AdminCommand("wowpay", "ID [rodina|sacralium|jade|dragonegg|pathofdoom|demonslayer]", "Награда за игровой квест (по умолчанию World of Warships, с «rodina» - Родина РП): игрок есть в списке конверсий лендинга (партнёр подтвердил игру). Начисляет награду квеста и уведомляет игрока; повторно тому же игроку не начисляет"),
+            new AdminCommand("wowpay", "ID [rodina_ШАГ|sacralium|jade|dragonegg|pathofdoom|demonslayer]", "Награда за игровой квест (по умолчанию World of Warships, «rodina_ticket|org|active|deposit» - шаг Родины РП): игрок есть в списке конверсий лендинга (партнёр подтвердил игру). Начисляет награду квеста и уведомляет игрока; повторно тому же игроку не начисляет"),
             new AdminCommand("psbbonus", "ID [скин|вручную|повтор|отказ]", "Квест ПСБ (скин AK-47 | Searing Rage): обычно не нужна, скин запрашивается сам после постбека LeadGid. Без слов - открыть игроку скин (вы сами проверили выплату). «вручную» - скин купили вы: отметить выплату и начислить компенсацию, «отказ» - банк не подтвердил"),
             new AdminCommand("ubrrbonus", "ID [скин|вручную|повтор|отказ]", "Квест УБРиР (скин AWP | Green Energy): обычно не нужна, скин запрашивается сам после постбека LeadGid. Без слов - открыть игроку скин (вы сами проверили выплату). «вручную» - скин купили вы: отметить выплату и начислить компенсацию, «отказ» - банк не подтвердил"),
             new AdminCommand("sovcombonus", "ID [повтор|карта|отказ]", "Выплата Совкомбанк (кредитная карта 180 дней без %) после подтверждения банка: начисляет игроку 💎 150 000 EXCASH (≈ 1500 ₽, награда клуба; плюс компенсация траты, если она есть), переводить деньги не нужно. Слово «карта» - прежний ручной перевод рублями без EXCASH, «отказ» - банк не подтвердил карту (игроку уйдёт сообщение, ожидание снимется), «повтор» - повторная выплата"),
@@ -11141,6 +11142,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             // Два этапа: сначала рубли (правило владельца), токены называются при начислении
             rewards.add(rubWithKopecks(ru.gamebot.platform.service.GameStageRewardService.SACRALIUM_STAGE1_EXC) + " ₽ за первый этап");
             rewards.add(rubWithKopecks(coins) + " ₽ за второй этап");
+        } else if ("rodina".equals(quest.getExternalOfferId())) {
+            // Награда квеста - сумма всех шагов, суммы по шагам - в «Как получить»
+            rewards.add("до " + rubWithKopecks(coins) + " ₽");
         } else if (sponsorBalanceService.applies(quest)) {
             // 26.11.2026 (владелец): на карточке сначала рубли; что начисляются они в EXCASH, сказано в условиях и при начислении
             rewards.add(rubWithKopecks(coins) + " ₽");
@@ -11162,13 +11166,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 String line = raw.trim();
                 if (line.isEmpty()) continue;
                 if (line.startsWith("Реклама")) ads.add(line);
-                else if (line.startsWith("💰") || line.startsWith("⏳")) money.add("💰 Рубли начислим в EXCASH, они выводятся без лимитов.");
+                else if (line.startsWith("⏳")) money.add("💰 Рубли начислим в EXCASH, они выводятся без лимитов.");
+                else if (line.startsWith("💰")) money.add(line);
                 else if (line.startsWith("📎")) header = line;
                 else quoted.add(line);
             }
             if (header != null) sb.append("\n<b>").append(escape(header)).append("</b>\n");
             else sb.append("\n");
-            if (!quoted.isEmpty()) sb.append("<blockquote>").append(escape(String.join("\n", quoted))).append("</blockquote>\n");
+            // сумма в конце шага («...: 5,40 ₽») - жирным
+            if (!quoted.isEmpty()) sb.append("<blockquote>")
+                    .append(escape(String.join("\n", quoted)).replaceAll("(?m): (\\d+(?:,\\d{2})? ₽)$", ": <b>$1</b>"))
+                    .append("</blockquote>\n");
             for (String line : money) sb.append("\n").append(escape(line)).append("\n");
             for (String line : ads) sb.append("\n<i>").append(escape(line)).append("</i>\n");
         }
@@ -11240,10 +11248,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String[] p = text.split("\\s+");
             Long targetId = p.length > 1 ? parseLong(p[1]) : null;
             if (targetId == null) {
-                sendText(admin.getTelegramId(), "⚠️ Формат: <code>/wowpay ID</code> (World of Warships), <code>/wowpay ID rodina</code> (Родина РП) <code>/wowpay ID sacralium</code> (Sacralium, второй этап) <code>/wowpay ID jade</code> (Нефритовое Царство) <code>/wowpay ID dragonegg</code> (Яйцо Дракона) или <code>/wowpay ID pathofdoom</code> (Путь Судьбы), <code>/wowpay ID demonslayer</code> (Охотник на Демонов), где ID - Telegram ID игрока из списка конверсий лендинга.", null);
+                sendText(admin.getTelegramId(), "⚠️ Формат: <code>/wowpay ID</code> (World of Warships), <code>/wowpay ID rodina_ШАГ</code> (Родина РП: ticket, org, active, deposit) <code>/wowpay ID sacralium</code> (Sacralium, второй этап) <code>/wowpay ID jade</code> (Нефритовое Царство) <code>/wowpay ID dragonegg</code> (Яйцо Дракона) или <code>/wowpay ID pathofdoom</code> (Путь Судьбы), <code>/wowpay ID demonslayer</code> (Охотник на Демонов), где ID - Telegram ID игрока из списка конверсий лендинга.", null);
                 return;
             }
             String offerKey = p.length > 2 ? p[2].toLowerCase(java.util.Locale.ROOT) : GAME_OFFER_ID;
+            if (offerKey.equals("rodina") || offerKey.startsWith("rodina_")) {
+                // «Родина РП» оплачивается по шагам: целиком её награду (сумму всех шагов) командой не начисляем
+                String stage = offerKey.startsWith("rodina_") ? offerKey.substring("rodina_".length()) : "";
+                if (!stage.equals("job") && !ru.gamebot.platform.service.GameStageRewardService.RODINA_STAGES.containsKey(stage)) {
+                    sendText(admin.getTelegramId(), "⚠️ «Родина РП» оплачивается по шагам: <code>/wowpay ID rodina_ticket</code> (военный билет, 5,40 ₽), "
+                            + "<code>rodina_org</code> (организация, 5,40 ₽), <code>rodina_active</code> (активный игрок, 7,20 ₽), <code>rodina_deposit</code> (пополнение, 36 ₽).", null);
+                    return;
+                }
+                String result = gameStageRewardService.payRodinaStage(String.valueOf(targetId), stage, null);
+                sendText(admin.getTelegramId(), "ok".equals(result)
+                        ? "✅ Родина РП, шаг начислен игроку " + targetId + " (или был начислен раньше)."
+                        : "⚠️ Не начислено: " + escape(result), null);
+                return;
+            }
             AppUser target = userService.findByTelegramId(targetId).orElse(null);
             if (target == null) {
                 sendText(admin.getTelegramId(), "⚠️ Игрок с ID " + targetId + " не найден.", null);
