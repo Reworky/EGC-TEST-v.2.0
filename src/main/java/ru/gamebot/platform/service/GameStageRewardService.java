@@ -28,6 +28,9 @@ public class GameStageRewardService {
     /** «Путь Судьбы»: за игрока из России сеть платит вдвое больше (120 ₽ против 60 ₽) - доплата 1 800 EXCASH = ещё 18 ₽ к награде квеста (всего 36 ₽). */
     public static final long PATHOFDOOM_RU_EXTRA_EXC = 1_800L;
 
+    /** «Охотник на Демонов»: за игрока из России сеть платит 96 ₽ против 64 ₽ - доплата 960 EXCASH = ещё 9,60 ₽ к награде квеста (всего 28,80 ₽). */
+    public static final long DEMONSLAYER_RU_EXTRA_EXC = 960L;
+
     private final AppUserRepository appUserRepository;
     private final AppSettingRepository appSettingRepository;
     private final QuestRepository questRepository;
@@ -63,6 +66,27 @@ public class GameStageRewardService {
         if (payOnce(found.getId(), "gamestage.pathofdoom.ru." + found.getId(), PATHOFDOOM_RU_EXTRA_EXC, "Путь Судьбы: доплата за Россию")) {
             try {
                 bot.caseAutoNotify(telegramId, "💰 <b>Путь Судьбы: ещё +18 ₽</b>\n\nИгрокам из России награда 36 ₽: доначислили 1 800 "
+                        + (sponsorBalanceService.enabled() ? "EXCASH, они выводятся в рубли без лимитов." : "EXC."), null);
+            } catch (Exception e) {
+                log.warn("[GameStage] notice failed for {}", telegramId, e);
+            }
+        }
+        return "ok";
+    }
+
+    /** Доплата за Россию к уже одобренному квесту «Охотник на Демонов»: один раз на игрока. Ответ: «ok» - начислено сейчас или раньше. */
+    public String payDemonSlayerRussiaExtra(String subid) {
+        long telegramId;
+        try {
+            telegramId = Long.parseLong(String.valueOf(subid).trim());
+        } catch (NumberFormatException e) {
+            return "bad subaccount";
+        }
+        AppUser found = appUserRepository.findByTelegramId(telegramId).orElse(null);
+        if (found == null) return "user not found";
+        if (payOnce(found.getId(), "gamestage.demonslayer.ru." + found.getId(), DEMONSLAYER_RU_EXTRA_EXC, "Охотник на Демонов: доплата за Россию")) {
+            try {
+                bot.caseAutoNotify(telegramId, "💰 <b>Охотник на Демонов: ещё +9,60 ₽</b>\n\nИгрокам из России награда 28,80 ₽: доначислили 960 "
                         + (sponsorBalanceService.enabled() ? "EXCASH, они выводятся в рубли без лимитов." : "EXC."), null);
             } catch (Exception e) {
                 log.warn("[GameStage] notice failed for {}", telegramId, e);

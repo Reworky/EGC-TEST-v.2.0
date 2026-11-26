@@ -220,6 +220,16 @@ public class PostbackController {
                 return ResponseEntity.ok("extra error");
             }
         }
+        if ("demonslayer_ru".equals(params.get("offer"))) {   // Россия: обычное одобрение квеста (19,20 ₽) и разовая доплата 9,60 ₽
+            ResponseEntity<String> approved = processConversion("landing", params.get("subid"), "demonslayer", params.get("id"), null);
+            if (!"ok".equals(approved.getBody())) return approved;
+            try {
+                return ResponseEntity.ok(gameStageRewardService.payDemonSlayerRussiaExtra(params.get("subid")));
+            } catch (Exception e) {
+                log.error("[LandingOffer] demonslayer RU extra failed, subid={}", params.get("subid"), e);
+                return ResponseEntity.ok("extra error");
+            }
+        }
         return processConversion("landing", params.get("subid"), params.get("offer"), params.get("id"), null);
     }
 

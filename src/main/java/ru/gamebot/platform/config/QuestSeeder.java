@@ -2374,10 +2374,49 @@ public class QuestSeeder implements CommandLineRunner {
             log.info("[QuestSeeder] Game offer quest created: Путь Судьбы (landing), reward {} EXC", PATHOFDOOM_REWARD_EXC);
         }
 
+        // ── Игровой оффер: Охотник на Демонов (Admitad), 26.11.2026 ──
+        // Одна цель «Регистрация»: Россия 96 ₽, остальные страны 64 ₽. Игроку 30%: 19,20 ₽ - награда квеста, за Россию ещё 9,60 ₽ доплатой (GameStageRewardService). Тестовый лимит рекламодателя - 100, суточный 50 (квестом не ограничивается).
+        gameCatalogService.setDifficultyMode("Охотник на Демонов", "FLAT", DEMONSLAYER_REWARD_EXC, 0);
+        if (appSettingRepository.findById(DEMONSLAYER_CARD_KEY).isEmpty()) {
+            Quest hq = questRepository.findFirstByTitleAndGameName(DEMONSLAYER_TITLE, "Охотник на Демонов").orElse(null);
+            if (hq == null) {
+                hq = new Quest();
+                hq.setGameName("Охотник на Демонов");
+                hq.setTitle(DEMONSLAYER_TITLE);
+                hq.setParticipantLimit(100);
+                hq.setActive(false);
+                hq.setCreatedAt(LocalDateTime.now());
+            }
+            hq.setPlatform("Браузер и телефон");
+            hq.setDurationDays(0);
+            hq.setDurationText("Бессрочно");
+            hq.setRewardXp(0);
+            hq.setRewardCoins(DEMONSLAYER_REWARD_EXC);
+            hq.setDescription("Фэнтези RPG с гильдиями, PvP-ареной и строительством своего города. Зарегистрируйся в игре: награду начислим, когда партнёр подтвердит регистрацию.");
+            hq.setInstruction("Открой страницу игры и зарегистрируйся:\n"
+                    + "https://igro-afisha.pages.dev/?tg={TG_ID}#demonslayer\n\n"
+                    + "Нужна новая регистрация именно по этой ссылке. Награда: 28,80 ₽ из России, 19,20 ₽ из других стран.");
+            hq.setRequirements("📎 Как получить\n"
+                    + "1. Нажми «Взять» и открой страницу игры.\n"
+                    + "2. Зарегистрируйся новым аккаунтом по этой ссылке.\n\n"
+                    + "16+. Страны: Россия, Беларусь, Казахстан и другие страны СНГ и Балтии.\n"
+                    + "⏳ Партнёр проверяет регистрацию в среднем 42 дня и подтверждает не все. Рубли начислим в EXCASH, они выводятся без лимитов.\n"
+                    + "Реклама · erid: 2bL9aMPo2e49hMef4rqU6rRVev");
+            hq.setExternalAutoApprove(true);
+            hq.setExternalOfferId("demonslayer");
+            hq.setExternalNetwork("landing");
+            hq.setExternalTargetType("REGISTRATION");
+            hq.setExternalMinPaymentRub(null);
+            questRepository.save(hq);
+            saveSetting(DEMONSLAYER_CARD_KEY);
+            log.info("[QuestSeeder] Game offer quest created: Охотник на Демонов (landing), reward {} EXC", DEMONSLAYER_REWARD_EXC);
+        }
+
         // 26.11.2026 (владелец: «включи квесты вместе с деплоем»): «Родина РП» и Sacralium включаются один раз; выключенный потом вручную квест сидер обратно не включает
         enableGameOfferOnce(RODINA_TITLE, "Родина РП", "quest.enable.rodina.v1");
         enableGameOfferOnce(SACRALIUM_TITLE, "Sacralium", "quest.enable.sacralium.v1");
         enableGameOfferOnce(JADE_TITLE, "Нефритовое Царство", "quest.enable.jade.v1");
+        enableGameOfferOnce(DEMONSLAYER_TITLE, "Охотник на Демонов", "quest.enable.demonslayer.v1");
         enableGameOfferOnce(PATHOFDOOM_TITLE, "Путь Судьбы", "quest.enable.pathofdoom.v1");
         enableGameOfferOnce(DRAGONEGG_TITLE, "Яйцо Дракона", "quest.enable.dragonegg.v1");   // с 26.11.2026 новые игровые квесты включаются сразу (решение владельца)
 
@@ -3558,6 +3597,10 @@ public class QuestSeeder implements CommandLineRunner {
     private static final String PATHOFDOOM_TITLE = "Путь Судьбы: установи и зайди в игру";
     private static final long PATHOFDOOM_REWARD_EXC = 1_800L;
     private static final String PATHOFDOOM_CARD_KEY = "pathofdoom.card.v2.done";   // v2: две суммы по стране
+
+    private static final String DEMONSLAYER_TITLE = "Охотник на Демонов: зарегистрируйся";
+    private static final long DEMONSLAYER_REWARD_EXC = 1_920L;
+    private static final String DEMONSLAYER_CARD_KEY = "demonslayer.card.v1.done";
 
     private static final String DRAGONEGG_TITLE = "Яйцо Дракона: зарегистрируйся";
     private static final long DRAGONEGG_REWARD_EXC = 1_400L;
