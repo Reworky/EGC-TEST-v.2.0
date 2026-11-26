@@ -2440,11 +2440,11 @@ public class QuestSeeder implements CommandLineRunner {
             aq.setDescription("Бесплатная MMO про современные танки. Скачай игру и играй: награду начислим, когда партнёр засчитает тебя активным игроком.");
             aq.setInstruction("Открой страницу игры, скачай её и зарегистрируйся:\n"
                     + "https://igro-afisha.pages.dev/?tg={TG_ID}#armored\n\n"
-                    + "Играй: за одну регистрацию награды нет.");
+                    + "Играй, пока тебя не засчитают активным игроком.");
             aq.setRequirements("📎 Как получить\n"
                     + "1. Нажми «Взять» и открой страницу игры.\n"
                     + "2. Скачай игру на ПК и зарегистрируйся новым аккаунтом по этой ссылке.\n"
-                    + "3. Играй, пока тебя не засчитают активным игроком. За одну регистрацию награды нет.\n"
+                    + "3. Играй, пока тебя не засчитают активным игроком.\n"
                     + "12+. Страна: Россия.\n\n"
                     + "💰 Рубли начислим в EXCASH, они выводятся без лимитов.\n"
                     + "Реклама · erid: 2bL9aMPo2e49hMef4rqUSJeQ8n");
@@ -3688,7 +3688,7 @@ public class QuestSeeder implements CommandLineRunner {
 
     private static final String ARMORED_TITLE = "Armored Warfare: скачай и поиграй";
     private static final long ARMORED_REWARD_EXC = 8_721L;
-    private static final String ARMORED_CARD_KEY = "armored.card.v1.done";
+    private static final String ARMORED_CARD_KEY = "armored.card.v2.done";   // v2: текст владельца 26.11.2026
 
     private static final String DRAGONEGG_TITLE = "Яйцо Дракона: зарегистрируйся";
     private static final long DRAGONEGG_REWARD_EXC = 1_440L;
