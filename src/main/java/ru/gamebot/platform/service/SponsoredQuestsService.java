@@ -40,6 +40,7 @@ public class SponsoredQuestsService {
 
     private final QuestService questService;
     private final EksiPicksService eksiPicksService;
+    private final GameStageRewardService gameStageRewardService;
 
     public List<Quest> activeQuests() {
         return questService.findAllSponsored().stream().filter(Quest::isActive).toList();
@@ -56,15 +57,18 @@ public class SponsoredQuestsService {
         return out;
     }
 
-    public static long bankRub(List<Quest> quests) {
+    /** Сумма рублей «до N ₽» (общая для бота и мини-аппа): банковские миссии и внешние партнёрские квесты. */
+    public long bankRub(AppUser user, List<Quest> quests) {
         long sum = 0;
+        long partnerExc = 0;
         for (Quest q : quests) {
             PartnerMission pm = PartnerMissions.forQuest(q);
             if (pm != null) sum += PartnerMissions.rubReward(pm);
             // Внешние партнёрские квесты (игровые партнёры, установки): награда в EXCASH по курсу 100% (100 EXC = 1 ₽); подписки на каналы на спонсорский баланс не идут и в сумму не входят
-            else if (SponsorBalanceService.isSponsorBalanceQuest(q)) sum += Math.round(q.getRewardCoins() / 100.0);
+            else if (SponsorBalanceService.isSponsorBalanceQuest(q)) partnerExc += gameStageRewardService.remainingMaxExc(q, user == null ? null : user.getId());
         }
-        return sum;
+        // копейки складываем вместе и отбрасываем остаток один раз: «до N ₽» не должно обещать больше, чем есть
+        return sum + partnerExc / 100;
     }
 
     /** Есть ли среди квестов награда-скин (поле premium в ответе мини-аппу осталось с прежним именем). */
@@ -78,7 +82,7 @@ public class SponsoredQuestsService {
 
     /** Сумма «до N ₽» по всем активным квестам, которые игрок ещё не выполнил. */
     public long prizeRub(AppUser user) {
-        return bankRub(notDone(user, activeQuests()));
+        return bankRub(user, notDone(user, activeQuests()));
     }
 
     public record CategoryView(String key, String label, String title, int count, long prizeRub, boolean premium) { }
@@ -94,7 +98,7 @@ public class SponsoredQuestsService {
         for (Category c : CATEGORIES) {
             List<Quest> inside = active.stream().filter(q -> c.key().equals(categoryOf(q))).toList();
             List<Quest> left = notDone(user, inside);
-            cats.add(new CategoryView(c.key(), c.label(), c.title(), inside.size(), bankRub(left), hasPremium(left)));
+            cats.add(new CategoryView(c.key(), c.label(), c.title(), inside.size(), bankRub(user, left), hasPremium(left)));
         }
         List<PickView> picks = new ArrayList<>();
         if (user != null) {
@@ -106,6 +110,6 @@ public class SponsoredQuestsService {
                 // рекомендации не критичны для экрана разделов
             }
         }
-        return new Overview(bankRub(notDone(user, active)), cats, picks);
+        return new Overview(bankRub(user, notDone(user, active)), cats, picks);
     }
 }

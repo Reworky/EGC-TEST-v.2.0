@@ -191,6 +191,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.ExcTransactionService excTransactionService;
     private final ru.gamebot.platform.service.SponsorBalanceService sponsorBalanceService;
     private final ru.gamebot.platform.service.GameStageRewardService gameStageRewardService;
+    private final ru.gamebot.platform.service.SponsoredQuestsService sponsoredQuestsService;
     private final ru.gamebot.platform.service.UgcPilotService ugcPilotService;
     private final ru.gamebot.platform.service.SquadService squadService;
     private final ru.gamebot.platform.service.WheelService wheelService;
@@ -6103,7 +6104,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Сумма «до N ₽» от банков и операторов по всем активным спонсорским квестам (0 - показывать нечего). */
     private long sponsoredPrizeRub(AppUser user) {
         try {
-            return sponsoredBankRub(sponsoredNotDone(user, activeSponsoredQuests()));
+            return sponsoredBankRub(user, sponsoredNotDone(user, activeSponsoredQuests()));
         } catch (Exception e) {
             log.warn("sponsoredPrizeRub failed", e);
             return 0;
@@ -9614,16 +9615,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return out;
     }
 
-    /** Сумма рублей «до N ₽»: банковские миссии (PartnerMissions.rubReward: без цены скинов) и внешние партнёрские квесты (награда в EXCASH, 100 EXC = 1 ₽). */
-    private long sponsoredBankRub(List<Quest> quests) {
-        long sum = 0;
-        for (Quest q : quests) {
-            ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(q);
-            if (pm != null) sum += ru.gamebot.platform.service.PartnerMissions.rubReward(pm);
-            // 19.11.2026 (владелец): считаем и внешние партнёрские квесты (игровые партнёры, установки): их награда идёт в EXCASH по курсу 100%
-            else if (ru.gamebot.platform.service.SponsorBalanceService.isSponsorBalanceQuest(q)) sum += Math.round(q.getRewardCoins() / 100.0);
-        }
-        return sum;
+    /** Сумма рублей «до N ₽» по партнёрским квестам игрока; расчёт один с мини-аппом (SponsoredQuestsService.bankRub). */
+    private long sponsoredBankRub(AppUser user, List<Quest> quests) {
+        return sponsoredQuestsService.bankRub(user, quests);
     }
 
     /** Есть ли среди квестов награда-скин. */
@@ -9647,7 +9641,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sponsoredMenuQuestsCached = activeSponsoredQuests();
                 sponsoredMenuQuestsAt = now;
             }
-            long sum = sponsoredBankRub(sponsoredNotDone(user, sponsoredMenuQuestsCached));
+            long sum = sponsoredBankRub(user, sponsoredNotDone(user, sponsoredMenuQuestsCached));
             return base + (sum > 0 ? " · до " + fmtExc(sum) + " ₽" : "");
         } catch (Exception e) {
             log.warn("Failed to build sponsored menu label", e);
@@ -9703,7 +9697,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!eksiPicksService.forUser(user).isEmpty()) {
             rows.add(keyboardFactory.callback("🤝 Экси рекомендует", "quests:section:picks"));
         }
-        long sum = sponsoredBankRub(sponsoredNotDone(user, activeNow));
+        long sum = sponsoredBankRub(user, sponsoredNotDone(user, activeNow));
         // 26.11.2026 (текст владельца): без суммы в рублях - награды теперь разные (скины CS2, выплаты банков, EXCASH)
         String prize = sum > 0
                 ? "🎁 Выполняй квесты и забирай награды: деньги в рублях и скины CS2 в Steam.\n\nКаждый квест доступен один раз на аккаунт.\n\n"
@@ -9734,7 +9728,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<Quest> quests = activeSponsoredQuests().stream().filter(q -> key.equals(sponsoredCategory(q))).collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         String head = "💼 <b>Спонсорские квесты · " + cat[2] + "</b>\n\n";
         List<Quest> catLeft = sponsoredNotDone(user, quests);
-        long catSum = sponsoredBankRub(catLeft);
+        long catSum = sponsoredBankRub(user, catLeft);
         boolean catPremium = sponsoredHasPremium(catLeft);
         if (catSum > 0 || catPremium) {
             head += "🎁 В этом разделе: " + (catSum > 0 ? "до " + fmtExc(catSum) + " ₽" : "") + (catPremium ? (catSum > 0 ? " и " : "") + "скины CS2 в Steam" : "") + ".\n\n";

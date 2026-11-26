@@ -192,6 +192,25 @@ public class GameStageRewardService {
         }
     }
 
+    /** Сколько EXCASH игрок ещё может получить по партнёрскому квесту, для сумм «до N ₽»: максимум (для России, со всеми шагами) минус уже начисленные шаги.
+     *  Награда квеста в базе - не весь максимум: за Россию идёт доплата, у Sacralium первый этап начисляется отдельно. userId == null - без вычета шагов. */
+    public long remainingMaxExc(ru.gamebot.platform.domain.model.Quest quest, Long userId) {
+        long total = quest.getRewardCoins();
+        String offer = "landing".equals(quest.getExternalNetwork()) ? quest.getExternalOfferId() : null;
+        if (offer == null) return total;
+        RussiaExtra extra = RUSSIA_EXTRAS.get(offer);
+        if (extra != null) total += extra.exc();
+        if ("sacralium".equals(offer)) {
+            if (userId == null || appSettingRepository.findById("gamestage.sacralium.1." + userId).isEmpty()) total += SACRALIUM_STAGE1_RU_EXC;
+        } else if ("rodina".equals(offer) && userId != null) {
+            // награда квеста «Родина РП» - сумма всех шагов: убираем оплаченные
+            for (var stage : RODINA_STAGES.entrySet()) {
+                if (paidStage(userId, stage.getKey())) total -= stage.getValue().exc();
+            }
+        }
+        return Math.max(0, total);
+    }
+
     /** Разовое начисление: отметка в app_settings пишется в той же транзакции под блокировкой строки игрока. true - начислено сейчас. */
     private boolean payOnce(Long userId, String key, long amount, String reason) {
         return Boolean.TRUE.equals(tx.execute(st -> {
