@@ -5821,17 +5821,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         clearOnboardingBrowseBack(user);
         welcomeStat("choice_shown");
         fn(user, ru.gamebot.platform.service.NewbieFunnelService.CHOICE_SHOWN);
-        // Текст владельца 23.11.2026 (голос Экси); сумма «до N ₽» с этого экрана убрана
+        // Текст и разметка владельца 26.11.2026 (голос Экси): жирные заголовки, описания путей цитатами; сумма «до N ₽» с этого экрана убрана
         String text = (fresh
                 ? "<b>👋 Привет, я Экси! Добро пожаловать в EGC.</b>\n\n"
-                        + "Держи подарок! <b>" + WELCOME_BONUS_EXC + " EXC</b> уже у тебя на балансе 🎁\n\n"
+                        + "🎁 " + WELCOME_BONUS_EXC + " EXC уже на твоём балансе, это подарок.\n\n"
                 : "")
-                + "<b>Выбери, с чего начнём:</b>\n\n"
+                + "<b>С чего начнём?</b>\n\n"
                 + "<b>💳 Деньги на карту</b>\n"
-                + "Спонсорские квесты: бесплатные задания от партнёров и не только.\n\n"
+                + "<blockquote>Спонсорские квесты: задания от партнёров. Выполнять их бесплатно.</blockquote>\n\n"
                 + "<b>🎮 Играть и копить</b>\n"
-                + "Квесты по твоей игре. EXC можно потратить на донат или вывести.\n\n"
-                + "Второй путь можно всегда выбрать в меню 😉";
+                + "<blockquote>CS2, PUBG PC и другие игры. Выполняй квесты, копи EXC, трать на донат, скины или выводи.</blockquote>\n\n"
+                + "Другой путь всегда есть в меню 😉";
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("💳 Спонсорские квесты", "onboarding:cards")),
                 List.of(keyboardFactory.callback("🎮 Играть и копить EXC", "onboarding:games")),
