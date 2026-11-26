@@ -21,6 +21,7 @@ import ru.gamebot.platform.service.ChannelContentService;
  * каждом старте. Бэклог: если час уже прошёл меньше чем 48 часов назад (деплой позже срока), пост не теряется, а уходит карточкой
  * через 15 минут, следующие просроченные - с шагом 4 часа; старше 48 часов - пропускается с записью в лог.
  * Необязательные поля записи: "photo" - "resource:имя_файла" (баннер из ресурсов бота, как у турниров и смены пачек; 12.11.2026), токен {{BOT}} в тексте - ссылка на бота.
+ * "repeatDays": N - повтор каждые N дней; снять с повтора - "disabled": true.
  * Снять пост с плана: оставить запись в JSON и добавить "disabled": true (удаление записи не отменит уже созданный черновик).
  */
 @Slf4j
@@ -70,6 +71,8 @@ public class ChannelManualPostSeeder implements CommandLineRunner {
                     if (cancelled > 0) log.info("[ManualPosts] {} disabled: cancelled {} pending draft(s)", key, cancelled);
                     continue;
                 }
+                // "repeatDays": N - пост выходит повторно каждые N дней (следующие выпуски создаёт ChannelContentService)
+                channelContentService.registerRepeatingPost(key, n.path("repeatDays").asInt(0));
                 try {
                     LocalDateTime at = LocalDateTime.parse(n.path("at").asText());
                     if (at.isBefore(now)) {

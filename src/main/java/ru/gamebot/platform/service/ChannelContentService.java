@@ -493,7 +493,7 @@ public class ChannelContentService {
     public int cancelManualPost(String key) {
         int cancelled = 0;
         for (ChannelPostDraft d : draftRepository.findAllByType(MANUAL_POST)) {
-            if (d.getMeta() != null && d.getMeta().startsWith(key + "|") && ChannelPostDraft.PENDING.equals(d.getStatus())
+            if (d.getMeta() != null && (d.getMeta().startsWith(key + "|") || d.getMeta().startsWith(key + "#")) && ChannelPostDraft.PENDING.equals(d.getStatus())
                     && d.getCardSentAt() == null) {
                 d.setStatus(ChannelPostDraft.REJECTED);
                 draftRepository.save(d);
@@ -686,6 +686,48 @@ public class ChannelContentService {
         return out;
     }
 
+    /** Повторяющиеся посты плана (26.11.2026): базовый ключ -> период в днях. Заполняет ChannelManualPostSeeder из поля repeatDays. */
+    private final java.util.Map<String, Integer> repeatingPosts = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Сколько ждать решения по карточке повторяющегося поста, прежде чем всё равно запланировать следующий выпуск. */
+    private static final int REPEAT_STALE_DAYS = 7;
+
+    public void registerRepeatingPost(String key, int everyDays) {
+        if (everyDays > 0) repeatingPosts.put(key, everyDays);
+    }
+
+    /** Создаёт следующий выпуск повторяющегося поста, когда по предыдущему принято решение (опубликован или отклонён) либо карточка висит
+     *  дольше REPEAT_STALE_DAYS. Текст и картинка берутся из предыдущего выпуска вместе с правками админа. Пропущенные сроки не догоняются:
+     *  берётся первый будущий слот того же дня недели и часа. Ключ следующего выпуска - "база#номер". */
+    private void queueRepeatingPosts(LocalDateTime now) {
+        if (repeatingPosts.isEmpty()) return;
+        List<ChannelPostDraft> manual = draftRepository.findAllByType(MANUAL_POST);
+        repeatingPosts.forEach((key, every) -> {
+            ChannelPostDraft last = null;
+            int issues = 0;
+            for (ChannelPostDraft d : manual) {
+                String m = d.getMeta();
+                if (m == null || !(m.startsWith(key + "|") || m.startsWith(key + "#"))) continue;
+                issues++;
+                if (last == null || d.getId() > last.getId()) last = d;
+            }
+            if (last == null || last.getSendAfter() == null) return;
+            if (ChannelPostDraft.PENDING.equals(last.getStatus())
+                    && (last.getCardSentAt() == null || last.getSendAfter().isAfter(now.minusDays(REPEAT_STALE_DAYS)))) return;
+            LocalDateTime next = last.getSendAfter().plusDays(every);
+            while (!next.isAfter(now)) next = next.plusDays(every);
+            String[] parts = last.getMeta().split("\\|", 2);
+            ChannelPostDraft d = new ChannelPostDraft();
+            d.setType(MANUAL_POST);
+            d.setPhotoFileId(last.getPhotoFileId());
+            d.setPostText(last.getPostText());
+            d.setMeta(key + "#" + (issues + 1) + "|" + (parts.length > 1 ? parts[1] : ""));
+            d.setSendAfter(next);
+            draftRepository.save(d);
+            log.info("[ChannelContent] Repeating post {} queued for {} UTC", key, next);
+        });
+    }
+
     /** Раз в 10 минут: если автопост включён, наступил его час (по времени сервера, UTC) и сегодня ещё не формировался - делаем черновик. */
     @Scheduled(fixedDelay = 600_000, initialDelay = 120_000)
     public void tick() {
@@ -694,6 +736,11 @@ public class ChannelContentService {
             applyChannelPlanMigration();
         } catch (Exception e) {
             log.error("[ChannelContent] applyChannelPlanMigration failed", e);
+        }
+        try {
+            queueRepeatingPosts(now);
+        } catch (Exception e) {
+            log.error("[ChannelContent] queueRepeatingPosts failed", e);
         }
         try {
             deliverDueCards();
