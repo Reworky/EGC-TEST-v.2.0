@@ -10646,8 +10646,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return fitCardCaption(sb.toString().trim());
     }
 
-    private static final String LONG_AUTO_STEP = "Награда придёт автоматически после подтверждения банком. Проверка занимает до 30–60 дней — это нормально, просто дождитесь.";
-    private static final String SHORT_AUTO_STEP = "Ждём проверку банком, обычно до 60 дней.";
+    private static final String LONG_AUTO_STEP = "Награда придёт автоматически после подтверждения банком.";
+    private static final String SHORT_AUTO_STEP = "Ждём проверку банком.";
 
     /** Карточка с баннером перелистывается правкой одного сообщения, только пока видимый текст помещается в подпись фото. Если не помещается, по очереди убираем
      *  необязательные строки: про паспорт и коды, затем «множество других бонусов». Полные условия игрок видит после «Взять». */
@@ -10774,7 +10774,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     .append(reward > 0 ? "🪙 <b>+" + fmtExc(reward) + " EXC</b> уже у тебя." : "")
                     .append(ru.gamebot.platform.service.PartnerMissions.grantsPartner(pm) ? (reward > 0 ? " " : "") + "Партнёрский статус и курс вывода 100% на все твои EXC включатся, когда банк выплатит бонус." : "").append("\n\n")
                     .append(clubExcashShown
-                            ? "<b>Что дальше?</b>\nБанк подтверждает карту не сразу (обычно до 30 дней). Когда подтвердит, менеджер начислит тебе 💎 <b>+" + fmtExc(clubExcashAmt) + " EXCASH</b> (≈ " + fmtExc(pm.clubRewardRub())
+                            ? "<b>Что дальше?</b>\nБанк подтверждает карту не сразу. Когда подтвердит, менеджер начислит тебе 💎 <b>+" + fmtExc(clubExcashAmt) + " EXCASH</b> (≈ " + fmtExc(pm.clubRewardRub())
                                 + " ₽): их можно вывести на карту или по СБП по курсу 100%. Пока награда ждёт на экране «Баланс»."
                             : ru.gamebot.platform.service.QuestSkinService.isSkinQuest(pm) && bonusItem
                             ? "<b>Что дальше?</b>\nКогда банк подтвердит карту, бот попросит ссылку обмена Steam и отправит скин."
@@ -11129,47 +11129,50 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append("🎯 <b>").append(escape(quest.getTitle())).append("</b>\n");
         sb.append(questMetaLine(quest)).append("\n");
         sb.append(activeDeadline.contains("с момента старта") ? "" : activeDeadline).append(statusLine);
+        // Макет владельца 26.11.2026: «Награда за квест», суммы цитатой, «Как получить» жирным с шагами в цитате; сроки проверки партнёром не пишем
+        List<String> rewards = new ArrayList<>();
         if ("pathofdoom".equals(quest.getExternalOfferId())) {
             // Две суммы по стране (26.11.2026, владелец): сеть платит за Россию вдвое больше
-            long baseRub = Math.round(coins / 100.0);
-            long ruRub = baseRub + ru.gamebot.platform.service.GameStageRewardService.PATHOFDOOM_RU_EXTRA_EXC / 100;
-            sb.append("\n💰 <b>До ").append(fmtExc(ruRub)).append(" ₽</b>: ").append(fmtExc(ruRub)).append(" ₽ игрокам из России, ")
-                    .append(fmtExc(baseRub)).append(" ₽ из других стран\n");
+            rewards.add(rubWithKopecks(coins + ru.gamebot.platform.service.GameStageRewardService.PATHOFDOOM_RU_EXTRA_EXC) + " ₽ игрокам из России");
+            rewards.add(rubWithKopecks(coins) + " ₽ из других стран");
         } else if ("demonslayer".equals(quest.getExternalOfferId())) {
             // Две суммы по стране, с копейками: ровно 30% от выплаты сети
-            String ruRub = rubWithKopecks(coins + ru.gamebot.platform.service.GameStageRewardService.DEMONSLAYER_RU_EXTRA_EXC);
-            sb.append("\n💰 <b>До ").append(ruRub).append(" ₽</b>: ").append(ruRub).append(" ₽ игрокам из России, ")
-                    .append(rubWithKopecks(coins)).append(" ₽ из других стран\n");
+            rewards.add(rubWithKopecks(coins + ru.gamebot.platform.service.GameStageRewardService.DEMONSLAYER_RU_EXTRA_EXC) + " ₽ игрокам из России");
+            rewards.add(rubWithKopecks(coins) + " ₽ из других стран");
         } else if ("sacralium".equals(quest.getExternalOfferId())) {
             // Два этапа: сначала рубли (правило владельца), токены называются при начислении
-            long stage1Rub = ru.gamebot.platform.service.GameStageRewardService.SACRALIUM_STAGE1_EXC / 100;
-            long stage2Rub = Math.round(coins / 100.0);
-            sb.append("\n💰 <b>До ").append(fmtExc(stage1Rub + stage2Rub)).append(" ₽</b>: ").append(fmtExc(stage1Rub)).append(" ₽ за первый этап и ")
-                    .append(fmtExc(stage2Rub)).append(" ₽ за второй\n");
+            rewards.add(rubWithKopecks(ru.gamebot.platform.service.GameStageRewardService.SACRALIUM_STAGE1_EXC) + " ₽ за первый этап");
+            rewards.add(rubWithKopecks(coins) + " ₽ за второй этап");
         } else if (sponsorBalanceService.applies(quest)) {
             // 26.11.2026 (владелец): на карточке сначала рубли; что начисляются они в EXCASH, сказано в условиях и при начислении
-            sb.append("\n💰 <b>+").append(fmtExc(Math.round(coins / 100.0))).append(" ₽</b>\n");
+            rewards.add(rubWithKopecks(coins) + " ₽");
         } else {
-            sb.append("\n🏆 <b>+").append(fmtExc(coins)).append(" EXC</b>").append(starsNote(coins)).append("\n");
+            rewards.add(fmtExc(coins) + " EXC" + starsNote(coins));
         }
+        sb.append("\n<b>Награда за квест:</b>\n<blockquote>").append(String.join("\n", rewards)).append("</blockquote>\n");
         if (quest.getDescription() != null && !quest.getDescription().isBlank()) {
-            sb.append("\n").append(escape(quest.getDescription())).append("\n");
+            // первое предложение (что за игра) отдельной строкой, дальше - что сделать
+            sb.append("\n").append(escape(quest.getDescription().trim().replaceFirst("\\. (?=\\p{Lu})", ".\n"))).append("\n");
         }
         if (quest.getRequirements() != null && !quest.getRequirements().isBlank()) {
-            // Оформление по тексту владельца 18.11.2026: блок «📎 Как получить» - цитатой, строка «Реклама · erid» - курсивом
-            for (String block : quest.getRequirements().trim().split("\\n\\s*\\n")) {
-                if (block.isBlank()) continue;
-                sb.append("\n");
-                if (block.trim().startsWith("📎")) {
-                    sb.append("<blockquote>").append(escape(block.trim())).append("</blockquote>\n");
-                } else {
-                    List<String> lines = new ArrayList<>();
-                    for (String line : block.trim().split("\\n")) {
-                        lines.add(line.trim().startsWith("Реклама") ? "<i>" + escape(line.trim()) + "</i>" : escape(line));
-                    }
-                    sb.append(String.join("\n", lines)).append("\n");
-                }
+            // «📎 Как получить» - жирным, всё под ним до строки про начисление или «Реклама» - одной цитатой
+            String header = null;
+            List<String> quoted = new ArrayList<>();
+            List<String> money = new ArrayList<>();
+            List<String> ads = new ArrayList<>();
+            for (String raw : quest.getRequirements().trim().split("\n")) {
+                String line = raw.trim();
+                if (line.isEmpty()) continue;
+                if (line.startsWith("Реклама")) ads.add(line);
+                else if (line.startsWith("💰") || line.startsWith("⏳")) money.add("💰 Рубли начислим в EXCASH, они выводятся без лимитов.");
+                else if (line.startsWith("📎")) header = line;
+                else quoted.add(line);
             }
+            if (header != null) sb.append("\n<b>").append(escape(header)).append("</b>\n");
+            else sb.append("\n");
+            if (!quoted.isEmpty()) sb.append("<blockquote>").append(escape(String.join("\n", quoted))).append("</blockquote>\n");
+            for (String line : money) sb.append("\n").append(escape(line)).append("\n");
+            for (String line : ads) sb.append("\n<i>").append(escape(line)).append("</i>\n");
         }
         return sb.toString().trim();
     }

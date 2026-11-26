@@ -2148,7 +2148,7 @@ public class QuestSeeder implements CommandLineRunner {
                     + "1. Нажми «Взять» и открой страницу игры.\n"
                     + "2. Скачай игру на ПК и зарегистрируйся.\n"
                     + "3. Запусти игру и поиграй 30+ минут.\n\n"
-                    + "⏳ Подтверждение от партнёра приходит от нескольких дней до 30, после него мы начисляем EXCASH.\n"
+                    + "💰 Рубли начислим в EXCASH, они выводятся без лимитов.\n"
                     + "Реклама · erid: LatgBuBKy");
             wowQuest.setExternalAutoApprove(true);
             wowQuest.setExternalOfferId("wows");
@@ -2202,7 +2202,7 @@ public class QuestSeeder implements CommandLineRunner {
                     + "1. Нажми «Взять» и открой страницу игры.\n"
                     + "2. Скачай игру и зарегистрируйся.\n"
                     + "3. Запусти игру и активно поиграй.\n\n"
-                    + "⏳ Подтверждение от партнёра приходит от нескольких дней до 30, после него мы начисляем EXCASH.\n"
+                    + "💰 Рубли начислим в EXCASH, они выводятся без лимитов.\n"
                     + "Реклама · erid: 2bL9aMPo2e49hMef4rqUtWH3qT");
             rodinaQuest.setExternalAutoApprove(true);
             rodinaQuest.setExternalOfferId("rodina");
@@ -2246,7 +2246,7 @@ public class QuestSeeder implements CommandLineRunner {
                     + "1. Нажми «Взять», открой страницу игры и зарегистрируйся (за регистрацию награды нет).\n"
                     + "2. Играй с компьютера, пока партнёр не засчитает тебя активным игроком: 7 ₽.\n"
                     + "3. Играй дальше до второго этапа, «Активный игрок 2»: ещё 100 ₽.\n\n"
-                    + "⏳ Партнёр подтверждает этапы в среднем до 40 дней. Рубли начислим в EXCASH, они выводятся без лимитов.\n"
+                    + "💰 Рубли начислим в EXCASH, они выводятся без лимитов.\n"
                     + "Реклама · erid: 2bL9aMPo2e49hMef4rqytJKLHd");
             sq.setExternalAutoApprove(true);
             sq.setExternalOfferId("sacralium");
@@ -2285,7 +2285,7 @@ public class QuestSeeder implements CommandLineRunner {
                     + "1. Нажми «Взять» и открой страницу игры.\n"
                     + "2. Зарегистрируйся новым аккаунтом по этой ссылке.\n\n"
                     + "Страны: Россия, Беларусь, Казахстан и другие страны СНГ и Балтии.\n"
-                    + "⏳ Партнёр проверяет регистрацию в среднем 36 дней и подтверждает не все. Рубли начислим в EXCASH, они выводятся без лимитов.\n"
+                    + "💰 Рубли начислим в EXCASH, они выводятся без лимитов.\n"
                     + "Реклама · erid: 2bL9aMPo2e49hMef4phyrH4SW3");
             jq.setExternalAutoApprove(true);
             jq.setExternalOfferId("jade");
@@ -2323,7 +2323,7 @@ public class QuestSeeder implements CommandLineRunner {
                     + "1. Нажми «Взять» и открой страницу игры.\n"
                     + "2. Зарегистрируйся новым аккаунтом по этой ссылке.\n\n"
                     + "16+. Страны: Россия, Беларусь, Казахстан и другие страны СНГ и Балтии.\n"
-                    + "⏳ Партнёр проверяет регистрацию в среднем 32 дня и подтверждает не все. Рубли начислим в EXCASH, они выводятся без лимитов.\n"
+                    + "💰 Рубли начислим в EXCASH, они выводятся без лимитов.\n"
                     + "Реклама · erid: 2bL9aMPo2e49hMef4piUxfcCAj");
             dq.setExternalAutoApprove(true);
             dq.setExternalOfferId("dragonegg");
@@ -2362,7 +2362,7 @@ public class QuestSeeder implements CommandLineRunner {
                     + "2. Установи игру по этой ссылке (установочный файл APK).\n"
                     + "3. Открой игру и войди в неё.\n\n"
                     + "16+. Только новые игроки. Страны: Россия, Беларусь, Казахстан и другие страны СНГ и Балтии.\n"
-                    + "⏳ Партнёр проверяет вход в среднем 37 дней. Рубли начислим в EXCASH, они выводятся без лимитов.\n"
+                    + "💰 Рубли начислим в EXCASH, они выводятся без лимитов.\n"
                     + "Реклама · erid: 2bL9aMPo2e49hMef4rqU6rRVjD");
             pq.setExternalAutoApprove(true);
             pq.setExternalOfferId("pathofdoom");
@@ -2400,7 +2400,7 @@ public class QuestSeeder implements CommandLineRunner {
                     + "1. Нажми «Взять» и открой страницу игры.\n"
                     + "2. Зарегистрируйся новым аккаунтом по этой ссылке.\n\n"
                     + "16+. Страны: Россия, Беларусь, Казахстан и другие страны СНГ и Балтии.\n"
-                    + "⏳ Партнёр проверяет регистрацию в среднем 42 дня и подтверждает не все. Рубли начислим в EXCASH, они выводятся без лимитов.\n"
+                    + "💰 Рубли начислим в EXCASH, они выводятся без лимитов.\n"
                     + "Реклама · erid: 2bL9aMPo2e49hMef4rqU6rRVev");
             hq.setExternalAutoApprove(true);
             hq.setExternalOfferId("demonslayer");
@@ -3450,6 +3450,9 @@ public class QuestSeeder implements CommandLineRunner {
         applyDebitSkinCards();
         hideTblackReferralQuest();
         switchOffStarsTyn0xQuest();
+
+        // Последним, после всех обновлений карточек: убираем из них сроки проверки и выплаты партнёром
+        stripPartnerTerms();
     }
 
     /** Дебетовые квесты (26.11.2026, владелец): награда клуба - скин вместо рублей/Premium/EXC. Прежние названия - только для разового переименования. */
@@ -3553,6 +3556,40 @@ public class QuestSeeder implements CommandLineRunner {
     private void markSkinSwitch(String missionKey) {
         String key = ru.gamebot.platform.service.QuestSkinService.SWITCH_KEY_PREFIX + missionKey;
         if (appSettingRepository.findById(key).isEmpty()) saveSetting(key);
+    }
+
+    /** 26.11.2026 (владелец): «если писать, сколько партнёр выводит деньги, никто не будет выполнять квест, про срок не пишем нигде».
+     *  Вырезает из карточек квестов только сроки проверки и выплаты партнёром; сроки на действия самого игрока (купить в течение 30 дней) остаются. Повторный запуск ничего не меняет. */
+    private void stripPartnerTerms() {
+        try {
+            int changed = 0;
+            for (Quest q : questRepository.findAll()) {
+                String d = withoutPartnerTerms(q.getDescription());
+                String i = withoutPartnerTerms(q.getInstruction());
+                String r = withoutPartnerTerms(q.getRequirements());
+                if (java.util.Objects.equals(d, q.getDescription()) && java.util.Objects.equals(i, q.getInstruction())
+                        && java.util.Objects.equals(r, q.getRequirements())) continue;
+                q.setDescription(d);
+                q.setInstruction(i);
+                q.setRequirements(r);
+                questRepository.save(q);
+                changed++;
+            }
+            if (changed > 0) log.info("[QuestSeeder] Partner terms removed from {} quest cards", changed);
+        } catch (Exception e) {
+            log.warn("[QuestSeeder] Partner terms cleanup failed", e);
+        }
+    }
+
+    private static String withoutPartnerTerms(String text) {
+        if (text == null) return null;
+        return text
+                .replaceAll("(?m)^⏳ (?:Подтверждение от партнёра|Партнёр )[^\n]*$", "💰 Рубли начислим в EXCASH, они выводятся без лимитов.")
+                .replaceAll("(Банк подтверждает (?:карту|выдачу карты))(?: обычно)? в течение \\d+ дней", "$1")
+                .replaceAll("(Банк (?:вернёт|отправит|начислит)[^.\n]*?)(?: обычно)? в течение \\d+ дней(?:, максимум \\d+)?", "$1")
+                .replaceAll("(Подтверждение приходит от партнёра автоматически),? ?(?:— )?обычно[^.\n]*\\.", "$1.")
+                .replace(" (обычно до 60 дней)", "")
+                .replace(" Проверка занимает до 30–60 дней — это нормально, просто дождитесь.", "");
     }
 
     private void saveSetting(String key) {
@@ -4492,7 +4529,7 @@ public class QuestSeeder implements CommandLineRunner {
     private static String skinSteps(String step1, String purchase, String receive) {
         return step1 + "\n\n"
                 + "2️⃣ " + purchase + "\n\n"
-                + "3️⃣ Дождись проверки банком (обычно до 60 дней)\n\n"
+                + "3️⃣ Дождись проверки банком\n\n"
                 + "4️⃣ " + receive;
     }
 
@@ -4501,7 +4538,7 @@ public class QuestSeeder implements CommandLineRunner {
         return step1 + "\n\n"
                 + "2️⃣ " + purchase + "\n\n"
                 + "3️⃣ " + receive + "\n\n"
-                + "4️⃣ Награда придёт автоматически после подтверждения банком. Проверка занимает до 30–60 дней — это нормально, просто дождитесь.";
+                + "4️⃣ Награда придёт автоматически после подтверждения банком.";
     }
 
     /** Один раз на квест (ключ в app_settings) ставит шаблон шагов всем спонсорским миссиям, кроме ОТП (у него шаги задаёт applyOtpCardContent при каждом старте). */
