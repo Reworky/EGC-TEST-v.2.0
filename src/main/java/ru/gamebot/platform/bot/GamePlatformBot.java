@@ -15121,10 +15121,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendSkinCard(user, type, index, messageId, sourcePhoto);
     }
 
-    /** Выбор типа оружия в разделе «Скины» (24.11.2026, владелец): как фильтр на маркетплейсе, только непустые типы и «Все скины». */
+    /** Выбор типа оружия в разделе «Скины» (24.11.2026, владелец): как фильтр на маркетплейсе, только непустые типы (кнопку «Все скины» убрали 26.11 по решению владельца). */
     private void sendSkinCategories(AppUser user, Integer sourceMessageId, boolean sourcePhoto) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.callback("🔫 Все скины (" + cs2SkinCatalog.all().size() + ")", "skin:v:all:0")));
         for (Map.Entry<String, String> e : ru.gamebot.platform.service.Cs2SkinCatalog.TYPE_LABELS.entrySet()) {
             int count = cs2SkinCatalog.byType(e.getKey()).size();
             if (count == 0) continue;
