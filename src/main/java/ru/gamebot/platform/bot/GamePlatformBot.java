@@ -10625,7 +10625,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<String[]> steps = splitQuestBlocks(instruction);
         if (!steps.isEmpty()) {
             List<String> stepLines = new ArrayList<>();
-            for (String[] step : steps) stepLines.add(escape(step[0])); // заголовки шагов 1️⃣-4️⃣
+            // Заголовки шагов 1️⃣-4️⃣; длинный общий четвёртый шаг на карточке сокращаем: подпись под баннером ограничена, иначе картинка уходит отдельно от текста
+            for (String[] step : steps) stepLines.add(escape(step[0].replace(LONG_AUTO_STEP, SHORT_AUTO_STEP)));
             sb.append("\n<blockquote expandable><b>Как это работает:</b>\n").append(String.join("\n", stepLines)).append("</blockquote>\n");
         }
         for (String[] cond : splitQuestBlocks(quest.getRequirements())) {
@@ -10633,7 +10634,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (cond.length > 1) sb.append("\n").append(escape(cond[1]));
             sb.append("</blockquote>");
         }
-        return sb.toString().trim();
+        return fitCardCaption(sb.toString().trim());
+    }
+
+    private static final String LONG_AUTO_STEP = "Награда придёт автоматически после подтверждения банком. Проверка занимает до 30–60 дней — это нормально, просто дождитесь.";
+    private static final String SHORT_AUTO_STEP = "Награда после проверки банком, до 60 дней.";
+
+    /** Карточка с баннером перелистывается правкой одного сообщения, только пока видимый текст помещается в подпись фото. Если не помещается, по очереди убираем
+     *  необязательные строки: про паспорт и коды, затем «множество других бонусов». Полные условия игрок видит после «Взять». */
+    private static String fitCardCaption(String text) {
+        String[] optional = {"\n\n🔒 Паспорт, коды из СМС и номер карты нам не нужны.", "\n🔒 Паспорт, коды из СМС и номер карты нам не нужны.", "\n✅ И множество других бонусов от банка"};
+        String out = text;
+        for (String line : optional) {
+            if (out.replaceAll("<[^>]+>", "").length() <= 1000) break;
+            out = out.replace(line, "");
+        }
+        if (out.replaceAll("<[^>]+>", "").length() > 1000) {
+            log.warn("[QuestCard] caption still too long ({} chars): picture will be sent separately", out.replaceAll("<[^>]+>", "").length());
+        }
+        return out;
     }
 
     /** Блоки «Что ты получаешь:» и «Как это работает:» (заголовок и текст до пустой строки) в раскрывающуюся цитату Telegram: на виду заголовок и первые строки (15.11.2026, владелец).
