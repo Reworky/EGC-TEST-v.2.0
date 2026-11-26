@@ -797,11 +797,12 @@ public class AnalyticsService {
         List<TrafficFunnelService.SourceFunnel> all = funnelService.compute().stream()
                 .filter(f -> f.started() > 0 || f.source().getSpendRub() > 0)
                 .sorted((a, b) -> Long.compare(b.started(), a.started())).toList();
-        long spend = 0, first = 0, second = 0, act = 0;
+        long spend = 0, first = 0, second = 0, third = 0, act = 0;
         for (var f : all) {
             spend += f.source().getSpendRub();
             first += f.firstQuest();
             second += f.secondQuest();
+            third += f.thirdQuest();
             act += f.activated();
         }
         out.add(L("src_spend", "Расход на закупы (введён вручную)", "₽", (double) spend, null));
@@ -809,13 +810,16 @@ public class AnalyticsService {
                 "расход / активировавшие аккаунт", true));
         out.add(L("src_cac_first", "Стоимость игрока с 1-м квестом", "₽", first > 0 && spend > 0 ? (double) Math.round((double) spend / first) : null, null, null, true));
         out.add(L("src_cac_second", "Стоимость игрока со 2-м квестом", "₽", second > 0 && spend > 0 ? (double) Math.round((double) spend / second) : null, null, null, true));
+        out.add(L("src_cac_third", "Стоимость вовлечённого игрока (3+ квеста)", "₽", third > 0 && spend > 0 ? (double) Math.round((double) spend / third) : null, null,
+                "расход / игроки с 3 и более одобренными квестами", true));
         StringBuilder sb = new StringBuilder("<b>Крупнейшие источники (все игроки с меткой)</b>\n");
         int shown = 0;
         for (var f : all) {
             if (shown++ >= 6) break;
             sb.append("• <code>").append(f.source().getCode()).append("</code> ").append(escape(f.source().getName()))
               .append(": зашли ").append(f.started()).append(" → 1-й квест ").append(f.firstQuest())
-              .append(" (").append(f.started() > 0 ? Math.round(pct(f.firstQuest(), f.started())) : 0).append("%)");
+              .append(" (").append(f.started() > 0 ? Math.round(pct(f.firstQuest(), f.started())) : 0).append("%)")
+              .append(" → 3+ квеста ").append(f.thirdQuest());
             if (f.source().getSpendRub() > 0) sb.append(", ").append(f.source().getSpendRub()).append(" ₽");
             sb.append("\n");
         }

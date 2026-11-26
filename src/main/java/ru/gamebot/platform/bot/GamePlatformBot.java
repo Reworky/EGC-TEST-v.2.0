@@ -25433,7 +25433,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return "💰 Расход не указан (кнопка «Указать расход» в карточке источника)";
         }
         return "💰 " + f.source().getSpendRub() + " ₽ · " + costText(f.costPer(f.activated()), "акт")
-                + " · " + costText(f.costPer(f.firstQuest()), "1-й кв") + " · " + costText(f.costPer(f.secondQuest()), "2-й кв");
+                + " · " + costText(f.costPer(f.firstQuest()), "1-й кв") + " · " + costText(f.costPer(f.secondQuest()), "2-й кв")
+                + " · " + costText(f.costPer(f.thirdQuest()), "игрока с 3+ кв");
     }
 
     private static String costText(Long cost, String label) {
@@ -25453,13 +25454,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(), "📊 <b>Сравнение закупов</b>\n\nПока ни один источник не привёл игроков.", backMenuKeyboard("admin:traffic"));
             return;
         }
-        long tSpend = 0, tStarted = 0, tAct = 0, tFirst = 0, tSecond = 0;
+        long tSpend = 0, tStarted = 0, tAct = 0, tFirst = 0, tSecond = 0, tThird = 0;
         for (var f : all) {
             tSpend += f.source().getSpendRub();
             tStarted += f.started();
             tAct += f.activated();
             tFirst += f.firstQuest();
             tSecond += f.secondQuest();
+            tThird += f.thirdQuest();
         }
         StringBuilder sb = new StringBuilder("📊 <b>Сравнение закупов</b>\n");
         sb.append("Источников с заходами или расходом: ").append(all.size());
@@ -25471,7 +25473,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append("<b>").append(escape(f.source().getName())).append("</b> · <code>").append(f.source().getCode()).append("</code>\n");
             sb.append("👆 ").append(f.source().getClicks()).append(" → 🚀 ").append(f.started())
               .append(" → ✅ ").append(f.activated()).append(" → 🎯 ").append(f.firstQuest())
-              .append(" → 🔁 ").append(f.secondQuest()).append("\n");
+              .append(" → 🔁 ").append(f.secondQuest()).append(" → 🏆 ").append(f.thirdQuest()).append("\n");
             if (f.matured() > 0) {
                 sb.append("🔥 Живы на 7-й день: ").append(f.alive7()).append(" из ").append(f.matured())
                   .append(" (").append(f.alive7() * 100 / f.matured()).append("%)\n");
@@ -25481,13 +25483,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append(formatTrafficSpendLine(f)).append("\n\n");
         }
         sb.append("<b>Итого</b> (по всем показанным): 🚀 ").append(tStarted).append(" → ✅ ").append(tAct)
-          .append(" → 🎯 ").append(tFirst).append(" → 🔁 ").append(tSecond).append("\n");
+          .append(" → 🎯 ").append(tFirst).append(" → 🔁 ").append(tSecond).append(" → 🏆 ").append(tThird).append("\n");
         if (tSpend > 0) {
             sb.append("💰 ").append(tSpend).append(" ₽ · ").append(tFirst > 0 ? String.valueOf(Math.round((double) tSpend / tFirst)) : "—")
               .append(" ₽ за игрока с 1-м квестом · ").append(tSecond > 0 ? String.valueOf(Math.round((double) tSpend / tSecond)) : "—")
-              .append(" ₽ со 2-м\n");
+              .append(" ₽ со 2-м · ").append(tThird > 0 ? String.valueOf(Math.round((double) tSpend / tThird)) : "—")
+              .append(" ₽ с 3+\n");
         }
-        sb.append("\nℹ️ 👆 клики → 🚀 зашли в бот → ✅ активировали → 🎯 1-й одобренный квест → 🔁 2-й. «Живы на 7-й день» — "
+        sb.append("\nℹ️ 👆 клики → 🚀 зашли в бот → ✅ активировали → 🎯 1-й одобренный квест → 🔁 2-й → 🏆 3 и больше (вовлечённые, квесты любых типов). «Живы на 7-й день» — "
                 + "заходили ≥7 дней после регистрации, считается только по тем, кто зарегистрирован 7+ дней назад. "
                 + "Цена в ₽ — только рекламный расход, без EXC, выданных игрокам.");
         sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("admin:traffic"));
@@ -25524,6 +25527,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append("📊 Конверсия (клик→акт.): <b>").append(conv).append("</b>\n");
             ru.gamebot.platform.service.TrafficFunnelService.SourceFunnel fun = trafficFunnelService.forSource(ts);
             sb.append("🎯 Сделали 1-й квест: <b>").append(fun.firstQuest()).append("</b> · 2-й: <b>").append(fun.secondQuest()).append("</b>\n");
+            sb.append("🏆 Вовлечённые (3+ квеста): <b>").append(fun.thirdQuest()).append("</b>\n");
             sb.append(formatTrafficSpendLine(fun)).append("\n\n");
             if (users.isEmpty()) {
                 sb.append("Пользователей пока нет.");

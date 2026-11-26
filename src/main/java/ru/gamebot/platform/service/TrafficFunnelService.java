@@ -14,7 +14,7 @@ import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
 import ru.gamebot.platform.domain.repository.TrafficSourceRepository;
 
-/** Воронка по каждому источнику закупа: зашли → профиль → активация → 1-й квест → 2-й квест → живы на 7-й день
+/** Воронка по каждому источнику закупа: зашли → профиль → активация → 1-й квест → 2-й квест → 3+ квестов («вовлечённый») → живы на 7-й день
  *  + расход и цена за шаг воронки. Считается в Java по двум лёгким выборкам (игроки с меткой источника и их
  *  одобренные квесты), без правок схемы: метка trafficSourceCode ставится один раз при первом /start. */
 @Service
@@ -29,7 +29,7 @@ public class TrafficFunnelService {
     private final QuestSubmissionRepository questSubmissionRepository;
 
     public record SourceFunnel(TrafficSource source, long started, long profiled, long activated,
-                               long firstQuest, long secondQuest, long matured, long alive7, long excPaid) {
+                               long firstQuest, long secondQuest, long thirdQuest, long matured, long alive7, long excPaid) {
 
         /** Цена шага воронки в ₽; null, если расход не указан или шаг ещё пуст. */
         public Long costPer(long steps) {
@@ -40,7 +40,7 @@ public class TrafficFunnelService {
 
     @Transactional(readOnly = true)
     public List<SourceFunnel> compute() {
-        Map<String, long[]> acc = new HashMap<>(); // 0 started,1 profiled,2 activated,3 first,4 second,5 matured,6 alive7,7 exc
+        Map<String, long[]> acc = new HashMap<>(); // 0 started,1 profiled,2 activated,3 first,4 second,5 matured,6 alive7,7 exc,8 third (3+)
         Map<Long, String> codeByUser = new HashMap<>();
         LocalDateTime now = LocalDateTime.now();
 
@@ -54,7 +54,7 @@ public class TrafficFunnelService {
             LocalDateTime lastBot = (LocalDateTime) r[6];
             LocalDateTime lastApp = (LocalDateTime) r[7];
 
-            long[] a = acc.computeIfAbsent(code, k -> new long[8]);
+            long[] a = acc.computeIfAbsent(code, k -> new long[9]);
             codeByUser.put(userId, code);
             a[0]++;
             if (profiled) a[1]++;
@@ -74,13 +74,14 @@ public class TrafficFunnelService {
             long approved = ((Number) r[1]).longValue();
             if (approved >= 1) a[3]++;
             if (approved >= 2) a[4]++;
+            if (approved >= 3) a[8]++;
             a[7] += ((Number) r[2]).longValue();
         }
 
         List<SourceFunnel> result = new ArrayList<>();
         for (TrafficSource ts : trafficSourceRepository.findAll()) {
-            long[] a = acc.getOrDefault(ts.getCode(), new long[8]);
-            result.add(new SourceFunnel(ts, a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]));
+            long[] a = acc.getOrDefault(ts.getCode(), new long[9]);
+            result.add(new SourceFunnel(ts, a[0], a[1], a[2], a[3], a[4], a[8], a[5], a[6], a[7]));
         }
         return result;
     }
@@ -89,7 +90,7 @@ public class TrafficFunnelService {
         for (SourceFunnel f : compute()) {
             if (f.source().getId().equals(ts.getId())) return f;
         }
-        return new SourceFunnel(ts, 0, 0, 0, 0, 0, 0, 0, 0);
+        return new SourceFunnel(ts, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
 
     private static LocalDateTime latest(LocalDateTime... values) {
