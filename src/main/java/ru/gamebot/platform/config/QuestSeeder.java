@@ -2335,10 +2335,50 @@ public class QuestSeeder implements CommandLineRunner {
             log.info("[QuestSeeder] Game offer quest created: Яйцо Дракона (landing), reward {} EXC", DRAGONEGG_REWARD_EXC);
         }
 
+        // ── Игровой оффер: Путь Судьбы (Admitad, Android), 26.11.2026 ──
+        // Одна цель «Первый вход в игру» (60-120 ₽); игроку 1 800 EXCASH = 18 ₽ (≈30% нижней границы). Тестовый лимит рекламодателя - 100, суточный 50 (квестом не ограничивается).
+        gameCatalogService.setDifficultyMode("Путь Судьбы", "FLAT", PATHOFDOOM_REWARD_EXC, 0);
+        if (appSettingRepository.findById(PATHOFDOOM_CARD_KEY).isEmpty()) {
+            Quest pq = questRepository.findFirstByTitleAndGameName(PATHOFDOOM_TITLE, "Путь Судьбы").orElse(null);
+            if (pq == null) {
+                pq = new Quest();
+                pq.setGameName("Путь Судьбы");
+                pq.setTitle(PATHOFDOOM_TITLE);
+                pq.setParticipantLimit(100);
+                pq.setActive(false);
+                pq.setCreatedAt(LocalDateTime.now());
+            }
+            pq.setPlatform("Android");
+            pq.setDurationDays(0);
+            pq.setDurationText("Бессрочно");
+            pq.setRewardXp(0);
+            pq.setRewardCoins(PATHOFDOOM_REWARD_EXC);
+            pq.setDescription("Мобильная MMORPG в мрачном фэнтези-мире. Установи игру на Android и зайди в неё: награду начислим, когда партнёр подтвердит первый вход.");
+            pq.setInstruction("Открой страницу игры и установи её:\n"
+                    + "https://igro-afisha.pages.dev/?tg={TG_ID}#pathofdoom\n\n"
+                    + "Зайди в игру после установки: без входа партнёр действие не подтвердит.");
+            pq.setRequirements("📎 Как получить\n"
+                    + "1. Нажми «Взять» и открой страницу игры с телефона на Android.\n"
+                    + "2. Установи игру по этой ссылке (установочный файл APK).\n"
+                    + "3. Открой игру и войди в неё.\n\n"
+                    + "16+. Только новые игроки. Страны: Россия, Беларусь, Казахстан и другие страны СНГ и Балтии.\n"
+                    + "⏳ Партнёр проверяет вход в среднем 37 дней. Рубли начислим в EXCASH, они выводятся без лимитов.\n"
+                    + "Реклама · erid: 2bL9aMPo2e49hMef4rqU6rRVjD");
+            pq.setExternalAutoApprove(true);
+            pq.setExternalOfferId("pathofdoom");
+            pq.setExternalNetwork("landing");
+            pq.setExternalTargetType("REGISTRATION");
+            pq.setExternalMinPaymentRub(null);
+            questRepository.save(pq);
+            saveSetting(PATHOFDOOM_CARD_KEY);
+            log.info("[QuestSeeder] Game offer quest created: Путь Судьбы (landing), reward {} EXC", PATHOFDOOM_REWARD_EXC);
+        }
+
         // 26.11.2026 (владелец: «включи квесты вместе с деплоем»): «Родина РП» и Sacralium включаются один раз; выключенный потом вручную квест сидер обратно не включает
         enableGameOfferOnce(RODINA_TITLE, "Родина РП", "quest.enable.rodina.v1");
         enableGameOfferOnce(SACRALIUM_TITLE, "Sacralium", "quest.enable.sacralium.v1");
         enableGameOfferOnce(JADE_TITLE, "Нефритовое Царство", "quest.enable.jade.v1");
+        enableGameOfferOnce(PATHOFDOOM_TITLE, "Путь Судьбы", "quest.enable.pathofdoom.v1");
         enableGameOfferOnce(DRAGONEGG_TITLE, "Яйцо Дракона", "quest.enable.dragonegg.v1");   // с 26.11.2026 новые игровые квесты включаются сразу (решение владельца)
 
         // Партнёрские (внешние) квесты бессрочные (решение владельца 18.11.2026): срок задаёт Quest.getDurationDays() (0 у всех externalAutoApprove),
@@ -3514,6 +3554,10 @@ public class QuestSeeder implements CommandLineRunner {
         saveSetting(key);
         log.info("[QuestSeeder] Game offer quest enabled: {}", gameName);
     }
+
+    private static final String PATHOFDOOM_TITLE = "Путь Судьбы: установи и зайди в игру";
+    private static final long PATHOFDOOM_REWARD_EXC = 1_800L;
+    private static final String PATHOFDOOM_CARD_KEY = "pathofdoom.card.v1.done";
 
     private static final String DRAGONEGG_TITLE = "Яйцо Дракона: зарегистрируйся";
     private static final long DRAGONEGG_REWARD_EXC = 1_400L;
