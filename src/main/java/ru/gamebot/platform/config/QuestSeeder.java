@@ -2258,6 +2258,10 @@ public class QuestSeeder implements CommandLineRunner {
             log.info("[QuestSeeder] Game offer quest created: Sacralium (landing), stage 2 reward {} EXC", SACRALIUM_REWARD_EXC);
         }
 
+        // 26.11.2026 (владелец: «включи квесты вместе с деплоем»): «Родина РП» и Sacralium включаются один раз; выключенный потом вручную квест сидер обратно не включает
+        enableGameOfferOnce(RODINA_TITLE, "Родина РП", "quest.enable.rodina.v1");
+        enableGameOfferOnce(SACRALIUM_TITLE, "Sacralium", "quest.enable.sacralium.v1");
+
         // Партнёрские (внешние) квесты бессрочные (решение владельца 18.11.2026): срок задаёт Quest.getDurationDays() (0 у всех externalAutoApprove),
         // здесь один раз снимаем дедлайны с уже взятых заявок, иначе они бы отменились старым сроком (WeeklyResetScheduler.cancelExpiredSubmissions)
         if (appSettingRepository.findById(EXTERNAL_UNLIMITED_KEY).isEmpty()) {
@@ -3417,6 +3421,19 @@ public class QuestSeeder implements CommandLineRunner {
         } catch (Exception e) {
             log.warn("[QuestSeeder] Hiding T-Bank referral quest failed", e);
         }
+    }
+
+    private void enableGameOfferOnce(String title, String gameName, String key) {
+        if (appSettingRepository.findById(key).isPresent()) return;
+        Quest q = questRepository.findFirstByTitleAndGameName(title, gameName).orElse(null);
+        if (q == null) {
+            log.warn("[QuestSeeder] Cannot enable game offer quest, not found: {}", gameName);
+            return;
+        }
+        q.setActive(true);
+        questRepository.save(q);
+        saveSetting(key);
+        log.info("[QuestSeeder] Game offer quest enabled: {}", gameName);
     }
 
     private static final String SACRALIUM_TITLE = "Sacralium: играй в новую MMORPG";
