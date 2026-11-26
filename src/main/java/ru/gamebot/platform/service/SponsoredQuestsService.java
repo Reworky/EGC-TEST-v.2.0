@@ -60,17 +60,18 @@ public class SponsoredQuestsService {
         long sum = 0;
         for (Quest q : quests) {
             PartnerMission pm = PartnerMissions.forQuest(q);
-            if (pm != null) sum += pm.bankRewardRub() + pm.clubRewardRub();
+            if (pm != null) sum += PartnerMissions.rubReward(pm);
             // Внешние партнёрские квесты (игровые партнёры, установки): награда в EXCASH по курсу 100% (100 EXC = 1 ₽); подписки на каналы на спонсорский баланс не идут и в сумму не входят
             else if (SponsorBalanceService.isSponsorBalanceQuest(q)) sum += Math.round(q.getRewardCoins() / 100.0);
         }
         return sum;
     }
 
+    /** Есть ли среди квестов награда-скин (поле premium в ответе мини-аппу осталось с прежним именем). */
     public static boolean hasPremium(List<Quest> quests) {
         for (Quest q : quests) {
             PartnerMission pm = PartnerMissions.forQuest(q);
-            if (pm != null && pm.bonusItem() != null && pm.bonusItem().contains("Premium")) return true;
+            if (QuestSkinService.isSkinQuest(pm)) return true;
         }
         return false;
     }

@@ -330,7 +330,8 @@ public class QuestSkinService {
         }
         String unit = sponsorBalanceService.enabled() ? " EXCASH" : " EXC";
         bot.caseAutoNotify(r.getTelegramId(), "🏆 <b>Скин выдан!</b>\n\n" + escape(SKINS.get(pm.key()).label()) + " у тебя в Steam."
-                        + (compensated[0] > 0 ? "\n💸 И ещё <b>+" + fmt(compensated[0]) + unit + "</b> на баланс: компенсация траты." : ""),
+                        + (compensated[0] > 0 ? "\n💸 И ещё <b>+" + fmt(compensated[0]) + unit + "</b>"
+                        + (sponsorBalanceService.enabled() ? " (≈ " + fmt(compensated[0] / 100) + " ₽): выводятся на карту или по СБП без лимитов." : " на баланс: компенсация траты.") : ""),
                 "✅ <b>Скин за квест «" + escape(pm.shortTitle()) + "» выдан</b>\n👤 " + r.getTelegramId() + (paidRub > 0 ? "\n🛒 Закупка: " + paidRub + " ₽" : "")
                         + (compensated[0] > 0 ? "\n💸 Компенсация: " + fmt(compensated[0]) + unit : ""));
     }

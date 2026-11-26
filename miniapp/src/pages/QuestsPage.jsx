@@ -902,7 +902,7 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
               <div className="sponsor-title">💼 Спонсорские квесты</div>
               {sponsorOverview.prizeRub > 0 && (
                 <div className="sponsor-prize">
-                  🎁 Выполняй квесты и забирай награды: скины CS2 в Steam, деньги от банков и EXCASH.
+                  🎁 Выполняй квесты и забирай награды: деньги в рублях и скины CS2 в Steam.
                   <div className="sponsor-prize-note">Каждый квест доступен один раз на аккаунт.</div>
                 </div>
               )}
@@ -951,7 +951,7 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
                 <div className="sponsor-title">💼 Спонсорские квесты · {cat?.title}</div>
                 {cat && (cat.prizeRub > 0 || cat.premium) && (
                   <div className="sponsor-prize">
-                    🎁 В этом разделе: {cat.prizeRub > 0 ? `до ${cat.prizeRub.toLocaleString('ru-RU')} ₽` : ''}{cat.premium ? `${cat.prizeRub > 0 ? ' и ' : ''}Telegram Premium` : ''}
+                    🎁 В этом разделе: {cat.prizeRub > 0 ? `до ${cat.prizeRub.toLocaleString('ru-RU')} ₽` : ''}{cat.premium ? `${cat.prizeRub > 0 ? ' и ' : ''}скины CS2 в Steam` : ''}
                   </div>
                 )}
                 {list.length === 0 && <div className="quest-empty-section">👀 Скоро здесь появятся новые задания.</div>}

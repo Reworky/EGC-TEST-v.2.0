@@ -6121,14 +6121,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private String sponsoredPrizeLine(AppUser user) {
         if (healthRatioService.isPartner(user)) return "";
         long sum = sponsoredPrizeRub(user);
-        return sum > 0 ? "💎 Получи до <b>" + fmtExc(sum) + " ₽</b> за спонсорские квесты.\n\n" : "";
+        return sum > 0 ? "💎 Получи до <b>" + fmtExc(sum) + " ₽</b> и скины CS2 за спонсорские квесты.\n\n" : "";
     }
 
     /** Блок экрана «Вывод пока закрыт» (текст владельца 24.11.2026): отдельный от sponsoredPrizeLine, который используется на других экранах. */
     private String sponsoredPrizeLockedBlock(AppUser user) {
         if (healthRatioService.isPartner(user)) return "";
         long sum = sponsoredPrizeRub(user);
-        return sum > 0 ? "💎 <b>А ещё можно получить до " + fmtExc(sum) + " ₽</b>\nЗа спонсорские квесты, и они выводятся без лимитов." : "";
+        return sum > 0 ? "💎 <b>А ещё можно получить до " + fmtExc(sum) + " ₽ и скины CS2</b>\nЗа спонсорские квесты. Эти рубли выводятся без лимитов." : "";
     }
 
     private static String partnerInfoBack(String code) {
@@ -6332,7 +6332,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             : itemPayout
                             ? "Банк выплатил бонус. Менеджер подарит тебе <b>" + escape(pm.bonusItem()) + "</b>: если подарка нет больше суток, напиши ему.\n\n"
                             : "Банк выплатил бонус, мы начислили тебе <b>" + fmtExc(amount) + " EXC</b>.\n\n")
-                            + (compensated > 0 ? "💸 Ты потратил(а) деньги на активацию карты, поэтому клуб добавил тебе ещё <b>" + fmtExc(compensated) + (sponsorBalanceService.enabled() ? " EXCASH" : " EXC") + "</b> в компенсацию.\n\n" : "")
+                            + (compensated > 0 ? "💸 Ты потратил(а) деньги на активацию карты, поэтому клуб добавил тебе ещё <b>" + fmtExc(compensated) + (sponsorBalanceService.enabled() ? " EXCASH</b> (≈ " + fmtExc(compensated / 100) + " ₽, выводятся на карту или по СБП без лимитов)" : " EXC</b>") + " в компенсацию.\n\n" : "")
                             + (grantsPartner ? "🤝 Ты теперь партнёр клуба: курс вывода 100% на все твои EXC и партнёрские цены.\n\n" : "")
                             + (grantsPartner ? "Вывод открыт разово: всю накопленную сумму можно вывести одной заявкой, сверх обычного месячного лимита."
                             + (missionMarked ? "\n\n🏦 Бейдж «Банкир EGC» уже в твоём профиле." : "") : ""),
@@ -9613,23 +9613,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return out;
     }
 
-    /** Сумма рублей «до N ₽»: банковские миссии (bankRewardRub + clubRewardRub) и внешние партнёрские квесты (награда в EXCASH, 100 EXC = 1 ₽). */
+    /** Сумма рублей «до N ₽»: банковские миссии (PartnerMissions.rubReward: без цены скинов) и внешние партнёрские квесты (награда в EXCASH, 100 EXC = 1 ₽). */
     private long sponsoredBankRub(List<Quest> quests) {
         long sum = 0;
         for (Quest q : quests) {
             ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(q);
-            if (pm != null) sum += pm.bankRewardRub() + pm.clubRewardRub();
+            if (pm != null) sum += ru.gamebot.platform.service.PartnerMissions.rubReward(pm);
             // 19.11.2026 (владелец): считаем и внешние партнёрские квесты (игровые партнёры, установки): их награда идёт в EXCASH по курсу 100%
             else if (ru.gamebot.platform.service.SponsorBalanceService.isSponsorBalanceQuest(q)) sum += Math.round(q.getRewardCoins() / 100.0);
         }
         return sum;
     }
 
-    /** Есть ли среди квестов партнёрская миссия с подарком Telegram Premium. */
+    /** Есть ли среди квестов награда-скин. */
     private boolean sponsoredHasPremium(List<Quest> quests) {
         for (Quest q : quests) {
             ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(q);
-            if (pm != null && pm.bonusItem() != null && pm.bonusItem().contains("Premium")) return true;
+            if (ru.gamebot.platform.service.QuestSkinService.isSkinQuest(pm)) return true;
         }
         return false;
     }
@@ -9705,7 +9705,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long sum = sponsoredBankRub(sponsoredNotDone(user, activeNow));
         // 26.11.2026 (текст владельца): без суммы в рублях - награды теперь разные (скины CS2, выплаты банков, EXCASH)
         String prize = sum > 0
-                ? "🎁 Выполняй квесты и забирай награды: скины CS2 в Steam, деньги от банков и EXCASH.\n\nКаждый квест доступен один раз на аккаунт.\n\n"
+                ? "🎁 Выполняй квесты и забирай награды: деньги в рублях и скины CS2 в Steam.\n\nКаждый квест доступен один раз на аккаунт.\n\n"
                 : "";
         // 15.11.2026: баннер раздела (золотой билет с алмазом, пушистый Экси, вариант 1, одобрен владельцем)
         sendResourceBanner(user.getTelegramId(), "sponsored_quests_banner.jpg",
@@ -9736,7 +9736,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long catSum = sponsoredBankRub(catLeft);
         boolean catPremium = sponsoredHasPremium(catLeft);
         if (catSum > 0 || catPremium) {
-            head += "🎁 В этом разделе: " + (catSum > 0 ? "до " + fmtExc(catSum) + " ₽" : "") + (catPremium ? (catSum > 0 ? " и " : "") + "Telegram Premium" : "") + "\n\n";
+            head += "🎁 В этом разделе: " + (catSum > 0 ? "до " + fmtExc(catSum) + " ₽" : "") + (catPremium ? (catSum > 0 ? " и " : "") + "скины CS2 в Steam" : "") + ".\n\n";
         }
         if (quests.isEmpty()) {
             sendSponsorCategoryScreen(user.getTelegramId(), key,
@@ -9756,8 +9756,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String listLabel = listPm != null ? listPm.listLabel() : trim(q.getTitle(), 60);
             // 17.11.2026 (владелец): на кнопке банка - итоговая сумма одним числом («ВТБ Киберкарта · 1 500 ₽»), без разбивки по частям. Т-Мобайл (бонусы на связь, не рубли) не трогаем
             if (listPm != null && !"tmobile".equals(listPm.key())) {
-                long listSum = listPm.bankRewardRub() + listPm.clubRewardRub();
-                if (listSum > 0) listLabel = listLabel + " · " + fmtExc(listSum) + " ₽";
+                long listSum = ru.gamebot.platform.service.PartnerMissions.rubReward(listPm);
+                boolean listSkin = ru.gamebot.platform.service.QuestSkinService.isSkinQuest(listPm);
+                // 26.11.2026 (владелец): сначала рубли, скин называется отдельно: «УБРиР · 500 ₽ + скин», «Альфа-Банк · скин»
+                if (listSum > 0) listLabel = listLabel + " · " + fmtExc(listSum) + " ₽" + (listSkin ? " + скин" : "");
+                else if (listSkin) listLabel = listLabel + " · скин";
             }
             buttons.add(keyboardFactory.callback(tag + listLabel, "quest:view:sponsored:all:" + q.getId()));
         }

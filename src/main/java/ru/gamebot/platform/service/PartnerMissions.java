@@ -930,6 +930,14 @@ public final class PartnerMissions {
         return pm != null && WithdrawalPartners.ALL.stream().anyMatch(b -> b.mission().key().equals(pm.key()));
     }
 
+    /** Рублёвая часть награды, которую обещаем игроку в суммах «до N ₽» (26.11.2026, владелец: игрок сначала видит рубли, EXCASH выводится в рубли без лимитов).
+     *  У квестов со скином цена скина в рубли не входит (скин называется отдельно): только выплата банка и компенсация траты в EXCASH по курсу 100 = 1 ₽. */
+    public static long rubReward(PartnerMission pm) {
+        if (pm == null) return 0;
+        if (QuestSkinService.isSkinQuest(pm)) return pm.bankRewardRub() + pm.compensationExc() / 100;
+        return pm.bankRewardRub() + pm.clubRewardRub();
+    }
+
     /** Конфиг миссии квеста по его названию (null, если квест не партнёрская миссия). */
     public static PartnerMission forQuest(Quest quest) {
         if (quest == null || quest.getTitle() == null) return null;
