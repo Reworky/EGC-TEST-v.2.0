@@ -2419,10 +2419,50 @@ public class QuestSeeder implements CommandLineRunner {
             log.info("[QuestSeeder] Game offer quest created: Охотник на Демонов (landing), reward {} EXC", DEMONSLAYER_REWARD_EXC);
         }
 
+        // ── Игровой оффер: Armored Warfare (Admitad), 26.11.2026 ──
+        // Оплачивается цель «Активный игрок» 290,70 ₽ (регистрация 0 ₽), только Россия. Игроку 30% = 87,21 ₽. Мест 100, как в прежних игровых квестах (правила программы не присланы).
+        gameCatalogService.setDifficultyMode("Armored Warfare", "FLAT", ARMORED_REWARD_EXC, 0);
+        if (appSettingRepository.findById(ARMORED_CARD_KEY).isEmpty()) {
+            Quest aq = questRepository.findFirstByTitleAndGameName(ARMORED_TITLE, "Armored Warfare").orElse(null);
+            if (aq == null) {
+                aq = new Quest();
+                aq.setGameName("Armored Warfare");
+                aq.setTitle(ARMORED_TITLE);
+                aq.setParticipantLimit(100);
+                aq.setActive(false);
+                aq.setCreatedAt(LocalDateTime.now());
+            }
+            aq.setPlatform("ПК · Россия");
+            aq.setDurationDays(0);
+            aq.setDurationText("Бессрочно");
+            aq.setRewardXp(0);
+            aq.setRewardCoins(ARMORED_REWARD_EXC);
+            aq.setDescription("Бесплатная MMO про современные танки. Скачай игру и играй: награду начислим, когда партнёр засчитает тебя активным игроком.");
+            aq.setInstruction("Открой страницу игры, скачай её и зарегистрируйся:\n"
+                    + "https://igro-afisha.pages.dev/?tg={TG_ID}#armored\n\n"
+                    + "Играй: за одну регистрацию награды нет.");
+            aq.setRequirements("📎 Как получить\n"
+                    + "1. Нажми «Взять» и открой страницу игры.\n"
+                    + "2. Скачай игру на ПК и зарегистрируйся новым аккаунтом по этой ссылке.\n"
+                    + "3. Играй, пока тебя не засчитают активным игроком. За одну регистрацию награды нет.\n"
+                    + "12+. Страна: Россия.\n\n"
+                    + "💰 Рубли начислим в EXCASH, они выводятся без лимитов.\n"
+                    + "Реклама · erid: 2bL9aMPo2e49hMef4rqUSJeQ8n");
+            aq.setExternalAutoApprove(true);
+            aq.setExternalOfferId("armored");
+            aq.setExternalNetwork("landing");
+            aq.setExternalTargetType("REGISTRATION");
+            aq.setExternalMinPaymentRub(null);
+            questRepository.save(aq);
+            saveSetting(ARMORED_CARD_KEY);
+            log.info("[QuestSeeder] Game offer quest created: Armored Warfare (landing), reward {} EXC", ARMORED_REWARD_EXC);
+        }
+
         // 26.11.2026 (владелец: «включи квесты вместе с деплоем»): «Родина РП» и Sacralium включаются один раз; выключенный потом вручную квест сидер обратно не включает
         enableGameOfferOnce(RODINA_TITLE, "Родина РП", "quest.enable.rodina.v1");
         enableGameOfferOnce(SACRALIUM_TITLE, "Sacralium", "quest.enable.sacralium.v1");
         enableGameOfferOnce(JADE_TITLE, "Нефритовое Царство", "quest.enable.jade.v1");
+        enableGameOfferOnce(ARMORED_TITLE, "Armored Warfare", "quest.enable.armored.v1");
         enableGameOfferOnce(DEMONSLAYER_TITLE, "Охотник на Демонов", "quest.enable.demonslayer.v1");
         enableGameOfferOnce(PATHOFDOOM_TITLE, "Путь Судьбы", "quest.enable.pathofdoom.v1");
         enableGameOfferOnce(DRAGONEGG_TITLE, "Яйцо Дракона", "quest.enable.dragonegg.v1");   // с 26.11.2026 новые игровые квесты включаются сразу (решение владельца)
@@ -3645,6 +3685,10 @@ public class QuestSeeder implements CommandLineRunner {
     private static final String DEMONSLAYER_TITLE = "Охотник на Демонов: зарегистрируйся";
     private static final long DEMONSLAYER_REWARD_EXC = 1_920L;
     private static final String DEMONSLAYER_CARD_KEY = "demonslayer.card.v1.done";
+
+    private static final String ARMORED_TITLE = "Armored Warfare: скачай и поиграй";
+    private static final long ARMORED_REWARD_EXC = 8_721L;
+    private static final String ARMORED_CARD_KEY = "armored.card.v1.done";
 
     private static final String DRAGONEGG_TITLE = "Яйцо Дракона: зарегистрируйся";
     private static final long DRAGONEGG_REWARD_EXC = 1_440L;
