@@ -606,13 +606,13 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
           q.sponsorReward
             ? <span className="reward-exc">💎 {q.rewardCoins.toLocaleString()} EXCASH <span style={{ opacity: 0.7 }}>(≈ {Math.round(q.rewardCoins / 100).toLocaleString('ru-RU')} ₽)</span></span>
             : q.ugcExcash
-            ? <span className="reward-exc">💎 до 25 000 EXCASH <span style={{ opacity: 0.7 }}>(≈ 250 ₽)</span></span>
+            ? <span className="reward-exc">💎 до 250 ₽ за ролик</span>
             : <span className="reward-exc"><i className="ti ti-coin"></i> {q.gameName === 'UGC' && !q.sponsored ? 'до 25 000' : q.rewardCoins.toLocaleString()} EXC{fundRatio != null && <> ({starsApprox(q.gameName === 'UGC' && !q.sponsored ? 25000 : q.rewardCoins, fundRatio)})</>}</span>
           )}
           {(details[q.id]?.rewardDiminished ?? q.rewardDiminished) && (
             <span className="reward-diminished">×½ лимит недели</span>
           )}
-          {!(q.rewardXp === 0 && q.bankRewardRub > 0) && (
+          {!(q.rewardXp === 0 && (q.bankRewardRub > 0 || q.ugcExcash)) && (
           <span className="reward-xp"><i className="ti ti-star"></i> {q.rewardXp} XP</span>
           )}
           {!q.sponsored && q.gameName !== 'UGC' && (q.ticketReward > 0 || CATEGORY_TICKETS[q.category]) && (
@@ -687,7 +687,7 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
           {(details[q.id]?.rewardDiminished ?? q.rewardDiminished) && (
             <div className="quest-limit-note">{weeklyLimitText(q, details[q.id])}</div>
           )}
-          {(details[q.id]?.egcPassBonusCoins > 0 || details[q.id]?.egcPassBonusXp > 0) && (
+          {!q.ugcExcash && (details[q.id]?.egcPassBonusCoins > 0 || details[q.id]?.egcPassBonusXp > 0) && (
             <div className="quest-egc-note">
               ⭐ EGC Pass сверху к награде:{' '}
               {details[q.id].egcPassBonusCoins > 0 && `+${details[q.id].egcPassBonusCoins.toLocaleString()} EXC (+10%)`}
@@ -1095,12 +1095,13 @@ function MyQuestsView({ expanded, details, onToggle, onDetailChanged, kind, onKi
             <div className="quest-title">{m.title}</div>
             <div className="quest-rewards">
               {m.bankRewardRub > 0 && <span className="reward-exc">💳 {m.bankRewardRub.toLocaleString('ru-RU')} ₽ от банка</span>}
-              {!(m.rewardCoins === 0 && m.bankRewardRub > 0) && (
+              {m.ugcExcash && <span className="reward-exc">💎 до 250 ₽</span>}
+              {!m.ugcExcash && !(m.rewardCoins === 0 && m.bankRewardRub > 0) && (
                 m.sponsorReward
                   ? <span className="reward-exc">💎 {m.rewardCoins.toLocaleString()} EXCASH <span style={{ opacity: 0.7 }}>(≈ {Math.round(m.rewardCoins / 100).toLocaleString('ru-RU')} ₽)</span></span>
                   : <span className="reward-exc"><i className="ti ti-coin"></i> {m.rewardCoins.toLocaleString()} EXC{fundRatio != null && <> ({starsApprox(m.rewardCoins, fundRatio)})</>}</span>
               )}
-              {!(m.rewardXp === 0 && m.bankRewardRub > 0) && (
+              {!(m.rewardXp === 0 && (m.bankRewardRub > 0 || m.ugcExcash)) && (
                 <span className="reward-xp"><i className="ti ti-star"></i> {m.rewardXp} XP</span>
               )}
             </div>

@@ -1046,12 +1046,15 @@ public class QuestService {
     }
 
     private static final String UGC_LADDER_EXC = "до 500 просмотров - 3 000 EXC, от 500 - 5 000, от 2 000 - 8 000, от 10 000 - 15 000, от 50 000 - 25 000.";
-    private static final String UGC_LADDER_EXCASH = "до 500 просмотров - 3 000 EXC, от 500 - 5 000 EXCASH, от 2 000 - 8 000 EXCASH, от 10 000 - 15 000 EXCASH, от 50 000 - 25 000 EXCASH.";
+    private static final String UGC_STEP5_OLD = "5️⃣ Награда: " + UGC_LADDER_EXC + " ";
+    /** Все награды UGC по строкам, текст владельца 27.11.2026: от 500 просмотров только рубли, до 500 - EXC. */
+    public static final String UGC_LADDER_RUB = "до 500 просмотров - 3 000 EXC\nот 500 - 50 ₽\nот 2 000 - 80 ₽\nот 10 000 - 150 ₽\nот 50 000 - 250 ₽.";
+    public static final String UGC_STEP5_RUB = "5️⃣ Награда:\n" + UGC_LADDER_RUB;
 
-    /** Пока идёт пилот «UGC в EXCASH», в шаге «Награда» карточки UGC-квеста ступени от 500 просмотров подписаны EXCASH; после пилота текст сам возвращается к EXC (в базе он не меняется). */
+    /** Пока за UGC платим в EXCASH, шаг «Награда» карточки UGC-квеста показывается в рублях; если выплаты остановить, вернётся прежний текст (в базе он не меняется). */
     public String ugcPilotInstruction(String instruction) {
-        if (instruction == null || !instruction.contains(UGC_LADDER_EXC) || !ugcPilotService.isActive()) return instruction;
-        return instruction.replace(UGC_LADDER_EXC, UGC_LADDER_EXCASH);
+        if (instruction == null || !instruction.contains(UGC_STEP5_OLD) || !ugcPilotService.isActive()) return instruction;
+        return instruction.replace(UGC_STEP5_OLD, UGC_STEP5_RUB + "\n\n");
     }
 
     /** Платим ли сейчас за UGC в EXCASH (пилот идёт): для подписи награды на карточках и в мини-аппе. */
@@ -1212,6 +1215,11 @@ public class QuestService {
             }
         }
         return new long[] {ugcPaidCount, ugcPaidCoins};
+    }
+
+    /** Все заявки игрока, включая одобренные (getUserSubmissions отдаёт только незакрытые). */
+    public List<QuestSubmission> getAllUserSubmissions(AppUser user) {
+        return questSubmissionRepository.findAllByUserOrderByCreatedAtDesc(user);
     }
 
     /** Базовая награда за ступень: для не-UGC квеста, пустой или неизвестной ступени - обычная награда квеста; для UGC не ниже неё. */

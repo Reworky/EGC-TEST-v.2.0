@@ -729,6 +729,7 @@ public class QuestController {
                         .rewardXp(s.getQuest().getRewardXp())
                         .rewardCoins(historyRewardCoins(user, s.getQuest()))
                         .sponsorReward(sponsorBalanceService.applies(s.getQuest()))
+                        .ugcExcash(questService.ugcExcashActive(s.getQuest()))
                         .build();
                 })
                 .toList();

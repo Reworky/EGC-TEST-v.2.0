@@ -30,4 +30,7 @@ public class MyQuestDto {
     private long rewardXp;
     private long rewardCoins;
     private boolean sponsorReward;
+
+    /** UGC-квест, за который платят EXCASH: мини-апп пишет награду в рублях. */
+    private boolean ugcExcash;
 }
