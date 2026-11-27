@@ -21,7 +21,7 @@ import ru.gamebot.platform.event.PlayerPushEvent;
 /**
  * UGC в EXCASH (пилот 21.11.2026, с 27.11.2026 по решению владельца постоянно, без срока и общего бюджета): за ролики от 500 просмотров платим EXCASH
  * (100 EXCASH = 1 ₽, вывод без лимитов), в разделе UGC игрок видит рубли. Защита: проверка модератором, зачисление через 3 дня после одобрения (удержание
- * от накрутки) и граница 100 000 EXCASH в сутки на игрока. Ступень «до 500 просмотров» остаётся в обычных EXC. Включено по умолчанию, пока работает
+ * от накрутки) и граница 150 000 EXCASH в сутки на игрока (равна максимальной награде за один ролик). Ступень «до 500 просмотров» остаётся в обычных EXC. Включено по умолчанию, пока работает
  * спонсорский баланс; аварийно остановить и вернуть EXC (вместе с прежними текстами) можно командой /ugcpilot stop.
  *
  * Удержанная часть лежит в QuestSubmission.heldCoins со статусом UGC_HOLD (не «PENDING»: тот статус разбирает планировщик подписок на каналы).
@@ -33,7 +33,7 @@ public class UgcPilotService {
 
     public static final String HELD = "UGC_HOLD";
     public static final String RELEASED = "UGC_RELEASED";
-    public static final long DAILY_CAP_EXCASH = 100_000L;
+    public static final long DAILY_CAP_EXCASH = 150_000L;
     public static final int HOLD_DAYS = 3;
     /** Ступень просмотров, с которой платим EXCASH (индекс в QuestService.UGC_VIEW_TIER_COINS: 1 = «500+»). */
     public static final int MIN_TIER = 1;

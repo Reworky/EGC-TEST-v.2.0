@@ -1047,14 +1047,18 @@ public class QuestService {
 
     private static final String UGC_LADDER_EXC = "до 500 просмотров - 3 000 EXC, от 500 - 5 000, от 2 000 - 8 000, от 10 000 - 15 000, от 50 000 - 25 000.";
     private static final String UGC_STEP5_OLD = "5️⃣ Награда: " + UGC_LADDER_EXC + " ";
-    /** Все награды UGC по строкам, текст владельца 27.11.2026: от 500 просмотров только рубли, до 500 - EXC. */
-    public static final String UGC_LADDER_RUB = "до 500 просмотров - 3 000 EXC\nот 500 - 50 ₽\nот 2 000 - 80 ₽\nот 10 000 - 150 ₽\nот 50 000 - 250 ₽.";
-    public static final String UGC_STEP5_RUB = "5️⃣ Награда:\n" + UGC_LADDER_RUB;
+    /** Все ступени UGC по строкам (цифры владельца 27.11.2026): от 500 просмотров в рублях, до 500 - EXC. Строки короткие, чтобы карточка влезала в подпись фото. */
+    public static final String UGC_LADDER_RUB = "До 500: 3 000 EXC\nОт 500 до 2 000: 30 ₽\nОт 2 000 до 10 000: 50 ₽\nОт 10 000: 150 ₽\nОт 50 000: 750 ₽\nОт 100 000: 1 500 ₽";
+    /** Те же ступени в EXC: показываются, только если выплаты в EXCASH остановлены (/ugcpilot stop). */
+    public static final String UGC_LADDER_EXC_NOW = "До 500: 3 000 EXC\nОт 500 до 2 000: 3 000 EXC\nОт 2 000 до 10 000: 5 000 EXC\nОт 10 000: 15 000 EXC\nОт 50 000: 75 000 EXC\nОт 100 000: 150 000 EXC";
+    public static final String UGC_STEP5_HEAD = "5️⃣ Награда за просмотры:";
+    public static final String UGC_STEP5_RUB = UGC_STEP5_HEAD + "\n" + UGC_LADDER_RUB;
 
-    /** Пока за UGC платим в EXCASH, шаг «Награда» карточки UGC-квеста показывается в рублях; если выплаты остановить, вернётся прежний текст (в базе он не меняется). */
+    /** Шаг «Награда» карточки UGC-квеста всегда показывается с действующими ступенями: в рублях, а при остановке выплат в EXCASH - в EXC (в базе лежит прежний текст-маркер, он не меняется). */
     public String ugcPilotInstruction(String instruction) {
-        if (instruction == null || !instruction.contains(UGC_STEP5_OLD) || !ugcPilotService.isActive()) return instruction;
-        return instruction.replace(UGC_STEP5_OLD, UGC_STEP5_RUB + "\n\n");
+        if (instruction == null || !instruction.contains(UGC_STEP5_OLD)) return instruction;
+        String step = ugcPilotService.isActive() ? UGC_STEP5_RUB : UGC_STEP5_HEAD + "\n" + UGC_LADDER_EXC_NOW;
+        return instruction.replace(UGC_STEP5_OLD, step + "\n\n");
     }
 
     /** Платим ли сейчас за UGC в EXCASH (пилот идёт): для подписи награды на карточках и в мини-аппе. */
@@ -1111,10 +1115,10 @@ public class QuestService {
     }
 
     /** Ступени награды UGC-квеста по просмотрам (27.10.2026): модератор смотрит счётчик ролика и выбирает ступень при одобрении.
-     *  Ступень 0 - базовая награда самого квеста (порог квеста .. 499 просмотров), остальные фиксированные; потолок 25 000 EXC. */
-    public static final long[] UGC_VIEW_TIER_COINS = {0, 5_000, 8_000, 15_000, 25_000};
+     *  Ступень 0 - базовая награда самого квеста (порог квеста .. 499 просмотров), остальные фиксированные; потолок 150 000 (1 500 ₽). */
+    public static final long[] UGC_VIEW_TIER_COINS = {0, 3_000, 5_000, 15_000, 75_000, 150_000};
     /** Подписи ступеней для кнопок модератора и текстов игроку (по числу просмотров). */
-    public static final String[] UGC_VIEW_TIER_LABELS = {"до 500", "500+", "2 000+", "10 000+", "50 000+"};
+    public static final String[] UGC_VIEW_TIER_LABELS = {"до 500", "500+", "2 000+", "10 000+", "50 000+", "100 000+"};
 
     public static boolean isUgcQuest(Quest quest) {
         return quest != null && "UGC".equalsIgnoreCase(quest.getGameName());

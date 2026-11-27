@@ -9121,7 +9121,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("alfabonus", "ID [скин|вручную|повтор|отказ]", "Квест Альфа-Банк (скин M4A1-S | Black Lotus): обычно не нужна, скин запрашивается сам после постбека LeadGid. Без слов - открыть игроку скин (вы сами проверили выплату). «вручную» - скин купили вы: отметить выплату и начислить компенсацию, «отказ» - банк не подтвердил"),
             new AdminCommand("forabonus", "ID [скин|вручную|повтор|отказ]", "Квест Фора-Банк (скин FAMAS | Rapid Eye Movement): обычно не нужна, скин запрашивается сам после постбека LeadGid. Без слов - открыть игроку скин (вы сами проверили выплату). «вручную» - скин купили вы: отметить выплату и начислить компенсацию, «отказ» - банк не подтвердил"),
             new AdminCommand("excash", "ID [±сумма] [уведомить] [причина]", "Спонсорский баланс EXCASH: без суммы - показать игровой и спонсорский баланс игрока; +сумма - начислить EXCASH, -сумма - списать (ниже нуля нельзя); слово «уведомить» отправляет игроку сообщение о начислении"),
-            new AdminCommand("ugcpilot", "status|start|stop", "UGC в EXCASH (постоянно): от 500 просмотров платим EXCASH с удержанием 3 дня, граница 100 000 EXCASH (1 000 ₽) в сутки на игрока, общего бюджета нет; status - расход, stop - аварийно остановить и вернуть EXC, start - включить снова"),
+            new AdminCommand("ugcpilot", "status|start|stop", "UGC в EXCASH (постоянно): от 500 просмотров платим EXCASH с удержанием 3 дня, граница 150 000 EXCASH (1 500 ₽) в сутки на игрока, общего бюджета нет; status - расход, stop - аварийно остановить и вернуть EXC, start - включить снова"),
             new AdminCommand("tocash", "ID сумма", "Перенести EXC с игрового баланса на спонсорский (EXCASH) 1 к 1, для игроков, которые просят перенести старые спонсорские заработки. Одна транзакция, оба баланса показываются в ответе"),
             new AdminCommand("wowpay", "ID [rodina_ШАГ|sacralium|jade|dragonegg|pathofdoom|demonslayer|armored]", "Награда за игровой квест (по умолчанию World of Warships, «rodina_ticket|org|active|deposit» - шаг Родины РП): игрок есть в списке конверсий лендинга (партнёр подтвердил игру). Начисляет награду квеста и уведомляет игрока; повторно тому же игроку не начисляет"),
             new AdminCommand("psbbonus", "ID [скин|вручную|повтор|отказ]", "Квест ПСБ (скин AK-47 | Searing Rage): обычно не нужна, скин запрашивается сам после постбека LeadGid. Без слов - открыть игроку скин (вы сами проверили выплату). «вручную» - скин купили вы: отметить выплату и начислить компенсацию, «отказ» - банк не подтвердил"),
@@ -10525,7 +10525,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             int rewardAt = personalizedInstruction.indexOf(QuestService.UGC_STEP5_RUB);
             if (rewardAt >= 0) {
                 String tail = personalizedInstruction.substring(rewardAt + QuestService.UGC_STEP5_RUB.length()).trim();
-                ugcRewardBlock = "5️⃣ Награда:\n<blockquote>" + QuestService.UGC_LADDER_RUB + "</blockquote>" + (tail.isEmpty() ? "" : "\n" + escape(tail));
+                ugcRewardBlock = QuestService.UGC_STEP5_HEAD + "\n<blockquote>" + QuestService.UGC_LADDER_RUB + "</blockquote>" + (tail.isEmpty() ? "" : "\n" + escape(tail));
                 personalizedInstruction = personalizedInstruction.substring(0, rewardAt).trim();
             }
         }
@@ -14932,8 +14932,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Максимальная награда за UGC-ролик в рублях (100 EXCASH = 1 ₽). */
-    private static long ugcMaxRub() {
-        return QuestService.UGC_VIEW_TIER_COINS[QuestService.UGC_VIEW_TIER_COINS.length - 1] / 100;
+    private static String ugcMaxRub() {
+        return ugcNum(QuestService.UGC_VIEW_TIER_COINS[QuestService.UGC_VIEW_TIER_COINS.length - 1] / 100);
     }
 
     /** Ролик оплачен (полностью или частично) в EXCASH. */
@@ -14945,25 +14945,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Подпись главного экрана раздела UGC (21.11.2026, текст владельца): обещание, шкала наград, прогресс игрока, оплачено всего, срок проверки. */
     private String ugcEntryText(AppUser user, List<Quest> quests) {
-        long baseCoins = quests.stream().mapToLong(Quest::getRewardCoins).filter(c -> c > 0).min().orElse(3000L);
         long[] tiers = QuestService.UGC_VIEW_TIER_COINS;
-        String[] labels = QuestService.UGC_VIEW_TIER_LABELS;
-        StringBuilder scale = new StringBuilder();
         boolean pilotOn = ugcPilotService.isActive();
-        for (int i = 0; i < tiers.length && i < labels.length; i++) {
-            long coins = i == 0 ? baseCoins : tiers[i];
-            if (i > 0) scale.append("\n");
-            // Пилот «UGC в EXCASH»: ступени от 500 просмотров платятся в EXCASH, «до 500» остаётся в EXC
-            boolean inRub = pilotOn && i >= ru.gamebot.platform.service.UgcPilotService.MIN_TIER;
-            scale.append(i == 0 ? labels[i] + " просмотров" : labels[i]).append(": ")
-                    .append(inRub ? ru.gamebot.platform.service.GameStageRewardService.rubWithKopecks(coins) + " ₽" : ugcNum(coins) + " EXC");
-        }
-        long maxCoins = tiers.length == 0 ? 25_000L : tiers[tiers.length - 1];
+        String scale = pilotOn ? QuestService.UGC_LADDER_RUB : QuestService.UGC_LADDER_EXC_NOW;
+        long maxCoins = tiers[tiers.length - 1];
 
         StringBuilder sb = new StringBuilder("🎬 <b>UGC · видео-квесты</b>\n\n");
         sb.append(pilotOn ? "Сними видео про клуб, вставь наш баннер и зарабатывай на просмотрах.\n" : "Сними видео про клуб, вставь наш баннер и получи EXC за просмотры.\n");
-        sb.append("До <b>").append(pilotOn ? ru.gamebot.platform.service.GameStageRewardService.rubWithKopecks(maxCoins) + " ₽" : ugcNum(maxCoins) + " EXC").append("</b> за ролик.\n\n");
-        sb.append("<b>Сколько платим?</b>\n<blockquote>").append(scale).append("</blockquote>\n");
+        sb.append("До <b>").append(pilotOn ? ugcMaxRub() + " ₽" : ugcNum(maxCoins) + " EXC").append("</b> за ролик.\n\n");
+        sb.append("<b>Сколько платим за просмотры?</b>\n<blockquote>").append(scale).append("</blockquote>\n");
         if (pilotOn) {
             sb.append("\n💎 От 500 просмотров начисляем EXCASH через ").append(ru.gamebot.platform.service.UgcPilotService.HOLD_DAYS)
                     .append(" дня после проверки: 100 EXCASH = 1 ₽, вывод без лимитов. В EXCASH можно получить до ")
@@ -32947,7 +32937,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback(sponsoredMenuLabel(user), "quests:section:sponsored")));
         rows.add(List.of(vpnMenuButton(user)));
         rows.add(List.of(keyboardFactory.callback("🎮 Игровые квесты", "quests:section:gaming")));
-        rows.add(List.of(keyboardFactory.callback(ugcPilotService.isActive() ? "🤳 UGC · до " + ugcMaxRub() + " ₽ за ролик" : "🤳 UGC · до 25 000 EXC", "quests:section:ugc")));
+        rows.add(List.of(keyboardFactory.callback(ugcPilotService.isActive() ? "🤳 UGC · до " + ugcMaxRub() + " ₽ за ролик" : "🤳 UGC · до " + ugcNum(QuestService.UGC_VIEW_TIER_COINS[QuestService.UGC_VIEW_TIER_COINS.length - 1]) + " EXC", "quests:section:ugc")));
         if (userService.dailyTasksEnabled()) {
             rows.add(List.of(keyboardFactory.callback(dailyTasksMenuLabel(user), "menu:dtasks")));
         }
