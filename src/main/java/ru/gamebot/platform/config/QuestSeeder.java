@@ -3614,6 +3614,8 @@ public class QuestSeeder implements CommandLineRunner {
                 String d = withoutPartnerTerms(q.getDescription());
                 String i = withoutPartnerTerms(q.getInstruction());
                 String r = withoutPartnerTerms(q.getRequirements());
+                // 27.11.2026 (владелец): в игровых квестах с переходом на лендинг строку «Реклама · erid» убираем (маркировка на лендинге); мини-апп показывает этот же текст
+                if (r != null && "landing".equals(q.getExternalNetwork())) r = r.replaceAll("(?m)\\n*^Реклама[^\\n]*$", "").trim();
                 if (java.util.Objects.equals(d, q.getDescription()) && java.util.Objects.equals(i, q.getInstruction())
                         && java.util.Objects.equals(r, q.getRequirements())) continue;
                 q.setDescription(d);

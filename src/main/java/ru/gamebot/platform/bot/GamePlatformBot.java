@@ -11167,11 +11167,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String header = null;
             List<String> quoted = new ArrayList<>();
             List<String> money = new ArrayList<>();
-            List<String> ads = new ArrayList<>();
             for (String raw : quest.getRequirements().trim().split("\n")) {
                 String line = raw.trim();
                 if (line.isEmpty()) continue;
-                if (line.startsWith("Реклама")) ads.add(line);
+                if (line.startsWith("Реклама")) continue;   // 27.11.2026 (владелец): «Реклама · erid» на карточке не пишем, маркировка есть на странице-лендинге
                 else if (line.startsWith("⏳")) money.add("💰 Рубли начислим в EXCASH, они выводятся без лимитов.");
                 else if (line.startsWith("💰")) money.add(line);
                 else if (line.startsWith("📎")) header = line;
@@ -11185,7 +11184,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             .replaceAll("(\\d+(?:,\\d{2})? ₽)(?= из (?:России|других стран))", "<b>$1</b>"))
                     .append("</blockquote>\n");
             for (String line : money) sb.append("\n").append(escape(line)).append("\n");
-            for (String line : ads) sb.append("\n<i>").append(escape(line)).append("</i>\n");
         }
         return sb.toString().trim();
     }
