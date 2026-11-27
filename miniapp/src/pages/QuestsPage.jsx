@@ -116,6 +116,52 @@ function SponsorDescription({ text, mission, instruction, requirements }) {
 const UGC_BANNERS = { youtube: '/ugc/youtube.jpg', tiktok: '/ugc/tiktok.jpg', instagram: '/ugc/instagram.jpg' };
 const PARTNER_BANNERS = { otp: '/sponsored/otp.jpg', vtb: '/sponsored/vtb.jpg', alfa: '/sponsored/alfa.jpg', fora: '/sponsored/fora.jpg', psb: '/sponsored/psb.jpg', ubrr: '/sponsored/ubrr.jpg', sovcom: '/sponsored/sovcom.jpg', otpcredit: '/sponsored/otpcredit.jpg', tbankcredit: '/sponsored/tbankcredit.jpg', vtbcredit: '/sponsored/vtbcredit.jpg', tblack: '/sponsored/tblack.jpg', tmobile: '/sponsored/tmobile.jpg' };
 
+// Квесты банков, где награда клуба - скин: у них своя шапка карточки с картинкой самого скина.
+// price - сумма «выбери любой другой скин до N ₽» (QuestSkinService.SKINS), условия - из PartnerMissions: менять вместе с ними.
+const SKIN_CARDS = {
+  otp: { bank: 'ОТП Банк', mark: 'ОТП', price: 400, wear: 'FT', terms: ['Карта бесплатная', '18+ · РФ', 'Покупка от 100 ₽'] },
+  tblack: { bank: 'Т-Банк Black', mark: 'Т', price: 250, wear: 'MW', terms: ['18+ · РФ', 'Покупка от 500 ₽'] },
+  vtb: { bank: 'ВТБ Киберкарта', mark: 'ВТБ', price: 500, wear: 'FN', terms: ['Карта бесплатная', '18+ · РФ', 'Траты от 1 000 ₽'] },
+  alfa: { bank: 'Альфа-Банк', mark: 'А', price: 300, wear: 'FT', terms: ['Карта бесплатная', '18+ · РФ', 'Одна покупка'] },
+  fora: { bank: 'Фора-Банк', mark: 'Ф', price: 400, wear: 'FT', terms: ['18+ · РФ', 'Покупка от 500 ₽'] },
+  psb: { bank: 'ПСБ', mark: 'ПСБ', price: 500, wear: 'MW', terms: ['Карта бесплатная', '18+ · РФ', 'Покупка от 1 000 ₽'] },
+  ubrr: { bank: 'УБРиР', mark: 'УБ', price: 500, wear: 'FT', terms: ['Карта бесплатная', 'РФ', 'Покупка от 1 000 ₽'] },
+  tbankblack: { bank: 'Т-Банк Black', mark: 'Т', price: 400, wear: 'FN', terms: ['Заявка из РФ', 'Первая операция по карте'] },
+};
+const TERM_ICONS = { 'Карта бесплатная': '🎁', '18+ · РФ': '👤', 'РФ': '👤', 'Заявка из РФ': '👤' };
+
+function SkinQuestHead({ q, partnerKey, bonusItem, card, status, statusLabel, expanded }) {
+  const skinName = bonusItem.replace(/^скин /, '').replace(/ в Steam$/, '');
+  const excashRub = q.sponsorReward ? Math.round(q.rewardCoins / 100) : 0;
+  return (
+    <>
+      <div className="skin-head">
+        <div className="skin-mark">{card.mark}</div>
+        <div className="skin-head-text">
+          <div className="skin-bank">{card.bank}</div>
+          <div className="skin-task">Оформи карту по ссылке и выполни условия</div>
+        </div>
+      </div>
+      {status && <div className="skin-status" style={{ color: STATUS_COLORS[status] }}>● {statusLabel}</div>}
+      <div className="skin-prize">
+        <div className="skin-art">
+          <img src={`/sponsored/skins/${partnerKey}.webp`} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }} />
+        </div>
+        <div className="skin-prize-text">
+          <div className="skin-price">Скин до {card.price.toLocaleString('ru-RU')} ₽</div>
+          {q.bankRewardRub > 0 && <div className="skin-extra">+ {q.bankRewardRub.toLocaleString('ru-RU')} ₽ от банка</div>}
+          {excashRub > 0 && <div className="skin-extra">+ {excashRub.toLocaleString('ru-RU')} ₽ в EXCASH</div>}
+          <div className="skin-name">{skinName} ({card.wear})</div>
+        </div>
+      </div>
+      <div className="skin-terms">
+        {card.terms.map(t => <span key={t}>{TERM_ICONS[t] || '🛒'} {t}</span>)}
+      </div>
+      {!expanded && <div className="skin-cta">{status ? 'Открыть квест' : 'Забрать скин'}</div>}
+    </>
+  );
+}
+
 function LinkPill({ url }) {
   const [copied, setCopied] = useState(false);
 
@@ -570,11 +616,23 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
   // важнее статус прохождения, чем то, что квест недавно добавили).
   const isNew = q.highlightNew && !submissionStatus;
 
+  const partnerKey = detail?.partnerKey ?? q.partnerKey;
+  const bonusItem = detail?.bonusItem ?? q.bonusItem;
+  // Проверяем и текст подарка: если у квеста награда сменится не на скин, картинка не останется
+  const skinCard = bonusItem?.startsWith('скин') ? SKIN_CARDS[partnerKey] : null;
+  const statusLabel = submissionStatus === 'DRAFT' && (brawlAutoVerify || externalAutoApprove)
+    ? 'Авто-отслеживание'
+    : (STATUS_LABELS[submissionStatus] || submissionStatus);
+
   return (
     <div
       className={`quest-card ${q.gameName === 'UGC' ? 'q-ugc' : (CATEGORY_CLASS[q.category] || 'q-flat')} ${submissionStatus ? 'quest-card-taken' : ''} ${isNew ? 'quest-card-new' : ''}`}
       onClick={() => onToggle(q.id)}
     >
+      {skinCard ? (
+        <SkinQuestHead q={q} partnerKey={partnerKey} bonusItem={bonusItem} card={skinCard}
+          status={submissionStatus} statusLabel={statusLabel} expanded={expanded === q.id} />
+      ) : (<>
       {/* Шапка: категория + статус */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -590,9 +648,7 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
         </div>
         {submissionStatus && (
           <span className="quest-taken-badge" style={{ color: STATUS_COLORS[submissionStatus] }}>
-            ● {submissionStatus === 'DRAFT' && (brawlAutoVerify || externalAutoApprove)
-                ? 'Авто-отслеживание'
-                : (STATUS_LABELS[submissionStatus] || submissionStatus)}
+            ● {statusLabel}
           </span>
         )}
       </div>
@@ -628,6 +684,7 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
           <span className="quest-seats-chip">👥 {q.seatsLeft} из {q.seatsTotal}</span>
         )}
       </div>
+      </>)}
       {expanded === q.id && (
         <div className="quest-detail" onClick={e => e.stopPropagation()}>
           {brawlAutoVerify && !externalAutoApprove ? (
@@ -639,8 +696,8 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
             </p>
           ) : (q.sponsored || details[q.id]?.sponsored) ? (
             <>
-              {PARTNER_BANNERS[details[q.id]?.partnerKey ?? q.partnerKey] && (
-                <img className="sponsor-banner" src={PARTNER_BANNERS[details[q.id]?.partnerKey ?? q.partnerKey]} alt="" />
+              {!skinCard && PARTNER_BANNERS[partnerKey] && (
+                <img className="sponsor-banner" src={PARTNER_BANNERS[partnerKey]} alt="" />
               )}
               <SponsorDescription
                 text={details[q.id]?.description ?? q.description}

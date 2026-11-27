@@ -607,6 +607,22 @@
 
 /* Спонсорские квесты: разделы (как в боте) */
 .sponsor-banner { width: 100%; border-radius: 14px; margin: 0 0 10px; display: block; }
+.skin-head { display: flex; gap: 12px; align-items: center; }
+.skin-mark { width: 52px; height: 52px; flex-shrink: 0; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; color: #fff; background: linear-gradient(145deg, rgba(124,58,237,0.45), rgba(124,58,237,0.14)); border: 1px solid rgba(167,139,250,0.35); }
+.skin-head-text { min-width: 0; }
+.skin-bank { font-size: 17px; font-weight: 800; color: #fff; line-height: 1.25; }
+.skin-task { font-size: 13px; color: rgba(255,255,255,0.6); line-height: 1.35; margin-top: 2px; }
+.skin-status { font-size: 12px; font-weight: 700; margin-top: 10px; }
+.skin-prize { display: flex; align-items: center; gap: 10px; margin: 12px 0; padding: 8px 12px 8px 4px; border-radius: 14px; background: linear-gradient(100deg, rgba(124,58,237,0.20), rgba(245,166,35,0.07)); }
+.skin-art { width: 46%; flex-shrink: 0; aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center; background: radial-gradient(closest-side, rgba(139,92,246,0.55), transparent); }
+.skin-art img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 6px 10px rgba(0,0,0,0.5)); }
+.skin-prize-text { min-width: 0; }
+.skin-price { font-size: 20px; font-weight: 800; color: #F5A623; line-height: 1.2; }
+.skin-extra { font-size: 14px; font-weight: 700; color: #fff; margin-top: 4px; }
+.skin-name { font-size: 12px; color: rgba(255,255,255,0.55); margin-top: 6px; line-height: 1.35; }
+.skin-terms { display: flex; flex-wrap: wrap; gap: 6px; }
+.skin-terms span { font-size: 12px; color: rgba(255,255,255,0.7); padding: 5px 9px; border-radius: 999px; background: rgba(255,255,255,0.06); }
+.skin-cta { margin-top: 12px; padding: 13px; border-radius: 12px; text-align: center; font-size: 15px; font-weight: 800; color: #1a1030; background: linear-gradient(90deg, #ffc53d, #f59023); }
 .sponsor-title { font-size: 16px; font-weight: 700; margin: 0 0 8px; }
 .sponsor-prize { margin: 0 0 10px; font-size: 13px; line-height: 1.4; color: rgba(255,255,255,0.85); }
 .sponsor-prize-note { margin-top: 6px; font-size: 12px; color: rgba(255,255,255,0.55); }
