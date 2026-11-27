@@ -184,7 +184,8 @@ public class Cs2CaseAutoIssueService {
             log.info("[Cs2CaseAutoIssue] bought '{}' for request {} (market item {})", c.hashName(), id, r.path("id").asText());
             bot.caseAutoNotify(s.telegramId(), "🎁 <b>" + noun(s) + " уже в пути</b>\n\n📦 " + escape(s.title()) + " · заявка <b>М-" + s.displayId() + "</b>\n\n"
                     + "<b>Что сделать сейчас:</b>\n1️⃣ Откройте Steam → «Предложения обмена»\n2️⃣ Нажмите «Принять» в течение <b>5 минут</b>\n\n"
-                    + "⚠️ Не успеете: обмен отменится, а EXC вернутся.", null);
+                    + "⚠️ Не успеете: обмен отменится, а EXC вернутся.\n\n"
+                    + "<blockquote expandable>⏱ После принятия обмена подтверждение в боте придёт не сразу, обычно в пределах 10 минут после покупки: мы проверяем сделку.</blockquote>", null);
             return;
         }
         int code = r.path("code").asInt(0);
