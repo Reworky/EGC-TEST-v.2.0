@@ -21931,7 +21931,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append("Отзыв с бота 🤖\n");
         sb.append("Игрок: <b><a href=\"").append(profileLink).append("\">").append(nickname).append("</a></b>\n");
         sb.append(stars);
-        // Отзыв о скине (25.11.2026): название скина в подписи; если игрок не приложил свой скриншот - картинка скина из каталога
+        // Отзыв о скине: название скина в подписи и картинка скина из каталога всегда (27.11.2026, владелец); скриншот игрока уходит вместе с ней, альбомом
         String skinImage = null;
         if (review.getRewardRequestId() != null) {
             try {
@@ -21956,8 +21956,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         InlineKeyboardMarkup reviewKeyboard = startEarningKeyboard();
         try {
             org.telegram.telegrambots.meta.api.objects.Message sent;
-            java.io.InputStream skinStream = review.getPhotoFileId() == null && skinImage != null ? getClass().getResourceAsStream("/" + skinImage) : null;
-            if (review.getPhotoFileId() != null) {
+            java.io.InputStream skinStream = skinImage != null ? getClass().getResourceAsStream("/" + skinImage) : null;
+            if (skinStream != null && review.getPhotoFileId() != null) {
+                try (java.io.InputStream in = skinStream) {
+                    // у альбома в Telegram не бывает кнопок, поэтому приглашение в бота - ссылкой в подписи
+                    String botUsername = appProperties.getBotUsername();
+                    String caption = botUsername == null || botUsername.isBlank() ? text
+                            : text + "\n\n<a href=\"https://t.me/" + botUsername.replace("@", "").trim() + "\">Начать зарабатывать с EGC</a>";
+                    org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto skin = new org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto();
+                    skin.setMedia(in, "skin.jpg");
+                    skin.setCaption(caption);
+                    skin.setParseMode("HTML");
+                    org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto shot = new org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto();
+                    shot.setMedia(review.getPhotoFileId());
+                    org.telegram.telegrambots.meta.api.methods.send.SendMediaGroup album = new org.telegram.telegrambots.meta.api.methods.send.SendMediaGroup();
+                    album.setChatId(channel);
+                    album.setMedias(List.of(skin, shot));
+                    sent = execute(album).get(0);
+                }
+            } else if (review.getPhotoFileId() != null) {
                 SendPhoto photo = new SendPhoto();
                 photo.setChatId(channel);
                 photo.setPhoto(new InputFile(review.getPhotoFileId()));
