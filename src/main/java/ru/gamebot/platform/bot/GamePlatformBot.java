@@ -11160,46 +11160,54 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append("🎯 <b>").append(escape(quest.getTitle())).append("</b>\n");
         sb.append(questMetaLine(quest)).append("\n");
         sb.append(activeDeadline.contains("с момента старта") ? "" : activeDeadline).append(statusLine);
-        // Макет владельца 26.11.2026: «Награда за квест», суммы цитатой, «Как получить» жирным с шагами в цитате; сроки проверки партнёром не пишем
+        // Макет владельца 27.11.2026 (вариант 1): сумма заголовком сразу под названием, несколько сумм - цитатой, шаги по номерам; сроки проверки партнёром не пишем
+        String head;
         List<String> rewards = new ArrayList<>();
         ru.gamebot.platform.service.GameStageRewardService.RussiaExtra russiaExtra = quest.getExternalOfferId() == null ? null
                 : ru.gamebot.platform.service.GameStageRewardService.RUSSIA_EXTRAS.get(quest.getExternalOfferId());
         if ("sacralium".equals(quest.getExternalOfferId())) {
             // Два этапа и две суммы по стране: в награде общий итог, суммы по этапам - в «Как получить»
-            rewards.add("до " + rubWithKopecks(ru.gamebot.platform.service.GameStageRewardService.SACRALIUM_STAGE1_RU_EXC + coins
-                    + (russiaExtra == null ? 0 : russiaExtra.exc())) + " ₽ игрокам из России");
-            rewards.add("до " + rubWithKopecks(ru.gamebot.platform.service.GameStageRewardService.SACRALIUM_STAGE1_EXC + coins) + " ₽ из других стран");
+            String ruSum = rubWithKopecks(ru.gamebot.platform.service.GameStageRewardService.SACRALIUM_STAGE1_RU_EXC + coins
+                    + (russiaExtra == null ? 0 : russiaExtra.exc()));
+            head = "Награда: до " + ruSum + " ₽";
+            rewards.add("🇷🇺 Россия: до <b>" + ruSum + " ₽</b>");
+            rewards.add("🌍 Другие страны: до <b>" + rubWithKopecks(ru.gamebot.platform.service.GameStageRewardService.SACRALIUM_STAGE1_EXC + coins) + " ₽</b>");
         } else if (russiaExtra != null) {
             // Две суммы по стране (26.11.2026, владелец): сеть платит за Россию больше
-            rewards.add(rubWithKopecks(coins + russiaExtra.exc()) + " ₽ игрокам из России");
-            rewards.add(rubWithKopecks(coins) + " ₽ из других стран");
+            head = "Награда";
+            rewards.add("🇷🇺 Россия: <b>" + rubWithKopecks(coins + russiaExtra.exc()) + " ₽</b>");
+            rewards.add("🌍 Другие страны: <b>" + rubWithKopecks(coins) + " ₽</b>");
         } else if ("rodina".equals(quest.getExternalOfferId())) {
             // Награда квеста - сумма всех шагов, суммы по шагам - в «Как получить»
-            rewards.add("до " + rubWithKopecks(coins) + " ₽");
+            head = "Награда: до " + rubWithKopecks(coins) + " ₽";
         } else if (sponsorBalanceService.applies(quest)) {
-            // 26.11.2026 (владелец): на карточке сначала рубли; что начисляются они в EXCASH, сказано в условиях и при начислении
-            rewards.add(rubWithKopecks(coins) + " ₽");
+            // 26.11.2026 (владелец): на карточке сначала рубли; что начисляются они в EXCASH, сказано внизу карточки и при начислении
+            head = "Награда: " + rubWithKopecks(coins) + " ₽";
         } else {
-            rewards.add(fmtExc(coins) + " EXC" + starsNote(coins));
+            head = "Награда: " + fmtExc(coins) + " EXC" + starsNote(coins);
         }
-        sb.append("\n<b>Награда за квест:</b>\n<blockquote>").append(String.join("\n", rewards)).append("</blockquote>\n");
+        sb.append("\n💰 <b>").append(head).append("</b>\n");
+        if (!rewards.isEmpty()) sb.append("<blockquote>").append(String.join("\n", rewards)).append("</blockquote>\n");
         if (quest.getDescription() != null && !quest.getDescription().isBlank()) {
             // первое предложение (что за игра) отдельной строкой, дальше - что сделать
             sb.append("\n").append(escape(quest.getDescription().trim().replaceFirst("\\. (?=\\p{Lu})", ".\n"))).append("\n");
         }
         if (quest.getRequirements() != null && !quest.getRequirements().isBlank()) {
-            // «📎 Как получить» - жирным, всё под ним до строки про начисление или «Реклама» - одной цитатой
+            // «📎 Как получить» - жирным, шаги цитатой; возраст и страны - отдельной строкой под цитатой
             String header = null;
             List<String> quoted = new ArrayList<>();
+            List<String> limits = new ArrayList<>();
             List<String> money = new ArrayList<>();
             for (String raw : quest.getRequirements().trim().split("\n")) {
                 String line = raw.trim();
                 if (line.isEmpty()) continue;
                 if (line.startsWith("Реклама")) continue;   // 27.11.2026 (владелец): «Реклама · erid» на карточке не пишем, маркировка есть на странице-лендинге
-                else if (line.startsWith("⏳")) money.add("💰 Рубли начислим в EXCASH, они выводятся без лимитов.");
-                else if (line.startsWith("💰")) money.add(line);
+                else if (line.startsWith("⏳")) money.add("💎 Рубли начислим в EXCASH: выводятся без лимитов");
+                else if (line.startsWith("💰")) money.add("💎" + line.substring("💰".length())
+                        .replace("Рубли начислим в EXCASH, они выводятся без лимитов.", "Рубли начислим в EXCASH: выводятся без лимитов"));
                 else if (line.startsWith("📎")) header = line;
-                else quoted.add(line);
+                else if (line.matches("(\\d{1,2}\\+\\.|Стран[аы]:).*")) limits.add(gameOfferLimitsLine(line));
+                else quoted.add(gameOfferStepLine(line));
             }
             if (header != null) sb.append("\n<b>").append(escape(header)).append("</b>\n");
             else sb.append("\n");
@@ -11208,9 +11216,41 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     .append(escape(String.join("\n", quoted)).replaceAll("(?m): (\\d+(?:,\\d{2})? ₽)$", ": <b>$1</b>")
                             .replaceAll("(\\d+(?:,\\d{2})? ₽)(?= из (?:России|других стран))", "<b>$1</b>"))
                     .append("</blockquote>\n");
-            for (String line : money) sb.append("\n").append(escape(line)).append("\n");
+            List<String> footer = new ArrayList<>(limits);
+            footer.addAll(money);
+            if (!footer.isEmpty()) {
+                sb.append("\n");
+                for (String line : footer) sb.append(escape(line)).append("\n");
+            }
         }
         return sb.toString().trim();
+    }
+
+    /** Шаг условий для карточки: «1. Текст.» -> «1️⃣ Текст»; ссылки на карточке рядом нет, поэтому «по этой ссылке» заменяется на слова про страницу игры. */
+    private static String gameOfferStepLine(String line) {
+        String text = line.replace("зарегистрируйся новым аккаунтом по этой ссылке", "зарегистрируй новый аккаунт на этой странице")
+                .replace("Зарегистрируйся новым аккаунтом по этой ссылке", "Зарегистрируй новый аккаунт на этой странице")
+                .replace("Установи игру по этой ссылке", "Установи игру с этой страницы");
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("^([1-9])\\.\\s+(.*?)\\.?$").matcher(text);
+        return m.matches() ? m.group(1) + "\uFE0F\u20E3 " + m.group(2) : text;
+    }
+
+    /** «16+. Только новые игроки. Страны: X.» -> «🔞 16+ · 🆕 Только новые игроки · 🌍 X». */
+    private static String gameOfferLimitsLine(String line) {
+        List<String> parts = new ArrayList<>();
+        java.util.regex.Matcher age = java.util.regex.Pattern.compile("^(\\d{1,2}\\+)\\.\\s*").matcher(line);
+        String rest = line;
+        if (age.find()) {
+            parts.add("🔞 " + age.group(1));
+            rest = line.substring(age.end());
+        }
+        if (rest.contains("Только новые игроки.")) {
+            parts.add("🆕 Только новые игроки");
+            rest = rest.replace("Только новые игроки.", "");
+        }
+        rest = rest.trim().replaceFirst("^Стран[аы]:\\s*", "").replaceFirst("\\.$", "");
+        if (!rest.isEmpty()) parts.add("🌍 " + rest);
+        return String.join(" · ", parts);
     }
 
     /** Админ-команды спонсорского баланса EXCASH (18.11.2026): /excash ID - показать оба баланса; /excash ID ±сумма [уведомить] [причина] - начислить (+) или списать (-) EXCASH;
