@@ -144,7 +144,17 @@ public class NewbieFunnelService {
 
     private String gameSub(String cond) {
         return "EXISTS(SELECT 1 FROM quest_submissions s JOIN quests q ON q.id = s.quest_id WHERE s.user_id = u.id AND q.game_name NOT IN (" + bankNames()
-                + ") AND q.sponsored = FALSE" + cond + ")";
+                + ") AND q.sponsored = FALSE AND q.external_auto_approve = FALSE AND LOWER(q.game_name) <> 'ugc'" + cond + ")";
+    }
+
+    /** Спонсорские квесты не от банков: игровые партнёры, установки, задания спонсоров. */
+    private String partnerSub(String cond) {
+        return "EXISTS(SELECT 1 FROM quest_submissions s JOIN quests q ON q.id = s.quest_id WHERE s.user_id = u.id AND q.game_name NOT IN (" + bankNames()
+                + ") AND (q.sponsored = TRUE OR q.external_auto_approve = TRUE)" + cond + ")";
+    }
+
+    private String ugcSub(String cond) {
+        return "EXISTS(SELECT 1 FROM quest_submissions s JOIN quests q ON q.id = s.quest_id WHERE s.user_id = u.id AND LOWER(q.game_name) = 'ugc' AND q.sponsored = FALSE" + cond + ")";
     }
 
     /** Ключ метрики -> логическое выражение по игроку u. Порядок - порядок вывода. */
@@ -191,6 +201,16 @@ public class NewbieFunnelService {
         m.put("sp_acted", "(" + ev(SP_DEBIT) + " OR " + ev(SP_OTHER) + " OR " + ev(SP_PICKS) + " OR " + ev(SP_MYQ) + " OR " + ev(SP_ANY_CARD) + ")");
         m.put("game_taken", gameSub(""));
         m.put("game_ok", gameSub(" AND s.status = 'APPROVED'"));
+        m.put("partner_taken", partnerSub(""));
+        m.put("partner_ok", partnerSub(" AND s.status = 'APPROVED'"));
+        // VPN: переход в VPN-бот из EGC - событие; пробный и оплата берутся из базы VPN-бота
+        m.put("vpn_open", ev(VPN_OPEN));
+        m.put("vpn_trial", "EXISTS(SELECT 1 FROM vpn2_accounts v WHERE v.telegram_id = u.telegram_id AND v.trial_used_at IS NOT NULL)");
+        m.put("vpn_paid", "EXISTS(SELECT 1 FROM vpn2_payments vp WHERE vp.telegram_id = u.telegram_id)");
+        m.put("ugc_open", ev(UGC_SECTION));
+        m.put("ugc_taken", ugcSub(""));
+        m.put("ugc_sent", ugcSub(" AND s.status IN ('PENDING','APPROVED','REJECTED','NEEDS_INFO')"));
+        m.put("ugc_ok", ugcSub(" AND s.status = 'APPROVED'"));
         m.put("activated", "u.registration_completed = TRUE");
         m.put("code", "EXISTS(SELECT 1 FROM daily_code_claims c WHERE c.user_id = u.id)");
         // Возврат на следующий день: только для «созревших» (зарегистрированы не позже ?3); суточные границы - по времени сервера
@@ -202,7 +222,8 @@ public class NewbieFunnelService {
     /** Колонки таблиц «по источникам» (после источника и числа пришедших): ключи метрик без параметра ?3. */
     public static final List<String> SOURCE_KEYS = List.of("wdone", "choice", "cards", "games", "menu",
             "sp_section", "sp_debit", "bank_card", "take_tap", "take18", "bank_taken", "apply", "lp_view", "lp_card", "lp_click", "lg_lead", "lg_ok", "lg_rej", "bank_ok", "bank_paid",
-            "picker", "game_list", "game_card", "game_taken", "game_ok");
+            "picker", "game_list", "game_card", "game_taken", "game_ok",
+            "partner_taken", "partner_ok", "vpn_open", "vpn_trial", "vpn_paid", "ugc_open", "ugc_taken", "ugc_ok");
 
     /** bySource: строки [источник, пришли, по одному числу на каждый ключ из sourceKeys]. */
     public record Report(LocalDateTime from, LocalDateTime to, boolean clamped, boolean hasEvents, LocalDateTime newStepsSince, LocalDateTime tapSince, LocalDateTime lpSince, Map<String, Long> counts, List<String> sourceKeys, List<Object[]> bySource) { }

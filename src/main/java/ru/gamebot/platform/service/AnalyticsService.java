@@ -1016,6 +1016,10 @@ public class AnalyticsService {
         out.add(L("nb_cards", "Выбрали «Спонсорские квесты»", "%", c.get("choice") == 0 ? null : pct(c.get("cards"), c.get("choice")), null, "от увидевших выбор", false));
         out.add(L("nb_bank", "Взяли квест банка", "%", started == 0 ? null : pct(c.get("bank_taken"), started), null, "от пришедших", false));
         out.add(L("nb_game", "Взяли игровой квест", "%", started == 0 ? null : pct(c.get("game_taken"), started), null, "от пришедших", false));
+        out.add(L("nb_partner", "Взяли квест партнёра (не банк)", "%", started == 0 ? null : pct(c.get("partner_taken"), started), null, "от пришедших", false));
+        out.add(L("nb_vpn_trial", "Взяли пробный VPN", "%", started == 0 ? null : pct(c.get("vpn_trial"), started), null, "от пришедших", false));
+        out.add(L("nb_vpn_paid", "Оплатили VPN", "%", started == 0 ? null : pct(c.get("vpn_paid"), started), null, "от пришедших", false));
+        out.add(L("nb_ugc", "Взяли UGC-квест", "%", started == 0 ? null : pct(c.get("ugc_taken"), started), null, "от пришедших", false));
         out.add(L("nb_d1", "Вернулись на следующий день", "%", c.get("d1_base") == 0 ? null : pct(c.get("d1"), c.get("d1_base")), null,
                 "из " + c.get("d1_base") + " игроков, у которых день уже прошёл", false));
 
@@ -1076,6 +1080,18 @@ public class AnalyticsService {
         funnelRow(t, "  банк отклонил", c.get("lg_rej"), started, c.get("lg_lead"));
         funnelRow(t, "Менеджер проверил", c.get("bank_ok"), started, c.get("bank_taken"));
         funnelRow(t, "Выплата отмечена", c.get("bank_paid"), started, c.get("bank_taken"));
+        t.append("\n🤝 Партнёры (не банки)\n");
+        funnelRow(t, "Взяли квест", c.get("partner_taken"), started, c.get("sp_section"));
+        funnelRow(t, "Квест засчитан", c.get("partner_ok"), started, c.get("partner_taken"));
+        t.append("\n🔐 VPN\n");
+        funnelRow(t, "Перешли в VPN-бот", c.get("vpn_open"), started, null);
+        funnelRow(t, "Взяли пробный", c.get("vpn_trial"), started, null);
+        funnelRow(t, "Оплатили", c.get("vpn_paid"), started, null);
+        t.append("\n🤳 UGC\n");
+        funnelRow(t, "Открыли раздел", c.get("ugc_open"), started, null);
+        funnelRow(t, "Взяли квест", c.get("ugc_taken"), started, c.get("ugc_open"));
+        funnelRow(t, "Прислали ролик", c.get("ugc_sent"), started, c.get("ugc_taken"));
+        funnelRow(t, "Ролик одобрен", c.get("ugc_ok"), started, c.get("ugc_sent"));
         t.append("\n🎮 Путь игр\n");
         funnelRow(t, "Экран выбора игры", c.get("picker"), started, c.get("games"));
         funnelRow(t, "Выбрали игру", c.get("pick"), started, c.get("picker"));
@@ -1110,6 +1126,10 @@ public class AnalyticsService {
                 new String[]{"bank_taken", "lp_view", "lp_card", "lp_click", "lg_lead", "lg_ok"}));
         extras.add(sourceTable("По источникам: итог по банку", r, new String[]{"лид", "одобр", "откл", "выпл"},
                 new String[]{"lg_lead", "lg_ok", "lg_rej", "bank_paid"}));
+        extras.add(sourceTable("По источникам: партнёры и VPN", r, new String[]{"партн", "зачт", "vpn", "проб", "опл"},
+                new String[]{"partner_taken", "partner_ok", "vpn_open", "vpn_trial", "vpn_paid"}));
+        extras.add(sourceTable("По источникам: UGC", r, new String[]{"разд", "взяли", "одобр"},
+                new String[]{"ugc_open", "ugc_taken", "ugc_ok"}));
         extras.add(sourceTable("По источникам: путь игр", r, new String[]{"игры", "выбор", "спис", "карт", "взяли", "вып"},
                 new String[]{"games", "picker", "game_list", "game_card", "game_taken", "game_ok"}));
         extras.add("<i>Как читать: «от пред.» - доля от шага, из которого человек должен был прийти; именно там, где она резко падает, и теряются люди. "

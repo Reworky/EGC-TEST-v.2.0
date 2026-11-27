@@ -5850,10 +5850,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  fresh=true - сразу после регистрации (с приветствием и стартовым бонусом); false - возврат к незавершённому онбордингу.
      *  Счётчики воронки - welcome.stat.choice_shown / choice_cards / choice_games (scripts/check-welcome-stories.sql). */
     private void sendOnboardingChoice(AppUser user, boolean fresh) {
-        if (fresh) {
-            welcomeStat("choice_shown");
-            fn(user, ru.gamebot.platform.service.NewbieFunnelService.CHOICE_SHOWN);
-        }
+        if (fresh) welcomeStat("choice_shown");
+        fn(user, ru.gamebot.platform.service.NewbieFunnelService.CHOICE_SHOWN);
         clearOnboardingBrowseBack(user);
         long sum = sponsoredPrizeRub(user);
         String text = (fresh ? "🎁 " + WELCOME_BONUS_EXC + " EXC уже на твоём балансе, это подарок.\n\n" : "")
@@ -10387,7 +10385,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sponsorPromoService.recordViewedOnce(questId, user.getId());
         }
         if (quest.isSponsored() || quest.isExternalAutoApprove()) fn(user, ru.gamebot.platform.service.NewbieFunnelService.SP_ANY_CARD);
-        else if (!isMissionQuest(quest)) fn(user, ru.gamebot.platform.service.NewbieFunnelService.GAME_CARD);
+        else if (!isMissionQuest(quest) && !QuestService.isUgcQuest(quest)) fn(user, ru.gamebot.platform.service.NewbieFunnelService.GAME_CARD);
         if (quest.isSponsored() || quest.isExternalAutoApprove()) partnerQuestFunnelService.sponsorViewed(user.getTelegramId(), questId); // вкладка аналитики «Спонсорские квесты» (19.11.2026)
         QuestSubmission latest = questService.getLatestSubmission(user, quest);
         boolean latestExpired = latest != null && questService.isExpired(latest);
