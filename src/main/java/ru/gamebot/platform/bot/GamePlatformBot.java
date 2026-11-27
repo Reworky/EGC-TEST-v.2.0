@@ -6123,14 +6123,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private String sponsoredPrizeLine(AppUser user) {
         if (healthRatioService.isPartner(user)) return "";
         long sum = sponsoredPrizeRub(user);
-        return sum > 0 ? "💎 Получи до <b>" + fmtExc(sum) + " ₽</b> и скины CS2 за спонсорские квесты.\n\n" : "";
+        return sum > 0 ? "💎 Получи до <b>" + fmtExc(sum) + " ₽</b> за спонсорские квесты, включая скины CS2.\n\n" : "";
     }
 
     /** Блок экрана «Вывод пока закрыт» (текст владельца 24.11.2026): отдельный от sponsoredPrizeLine, который используется на других экранах. */
     private String sponsoredPrizeLockedBlock(AppUser user) {
         if (healthRatioService.isPartner(user)) return "";
         long sum = sponsoredPrizeRub(user);
-        return sum > 0 ? "💎 <b>А ещё можно получить до " + fmtExc(sum) + " ₽ и скины CS2</b>\nЗа спонсорские квесты. Эти рубли выводятся без лимитов." : "";
+        return sum > 0 ? "💎 <b>А ещё можно получить до " + fmtExc(sum) + " ₽</b>\nЗа спонсорские квесты, включая скины CS2. Рубли выводятся без лимитов." : "";
     }
 
     private static String partnerInfoBack(String code) {
@@ -9731,7 +9731,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long catSum = sponsoredBankRub(user, catLeft);
         boolean catPremium = sponsoredHasPremium(catLeft);
         if (catSum > 0 || catPremium) {
-            head += "🎁 В этом разделе: " + (catSum > 0 ? "до " + fmtExc(catSum) + " ₽" : "") + (catPremium ? (catSum > 0 ? " и " : "") + "скины CS2 в Steam" : "") + ".\n\n";
+            head += "🎁 В этом разделе: " + (catSum > 0 ? "до " + fmtExc(catSum) + " ₽" : "") + (catPremium ? (catSum > 0 ? ", включая " : "") + "скины CS2 в Steam" : "") + ".\n\n";
         }
         if (quests.isEmpty()) {
             sendSponsorCategoryScreen(user.getTelegramId(), key,

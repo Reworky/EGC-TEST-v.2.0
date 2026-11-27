@@ -96,6 +96,11 @@ public class QuestSkinService {
         return pm != null && SKINS.containsKey(pm.key());
     }
 
+    /** Сколько рублей скин квеста добавляет в суммы «до N ₽»: сумма «любой другой скин до N ₽» из карточки; 0 - квест без скина. */
+    public static int skinRub(PartnerMission pm) {
+        return isSkinQuest(pm) ? SKINS.get(pm.key()).choiceRub() : 0;
+    }
+
     /** Реакция на постбек. Возвращает строку для сообщения админам; started = автовыдача открыта (или уже была открыта). */
     public Result onConversion(LeadgidConversion c, QuestSubmission sub, PartnerMission pm) {
         try {

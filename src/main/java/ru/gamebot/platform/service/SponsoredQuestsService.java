@@ -57,18 +57,23 @@ public class SponsoredQuestsService {
         return out;
     }
 
-    /** Сумма рублей «до N ₽» (общая для бота и мини-аппа): банковские миссии и внешние партнёрские квесты. */
+    /** Сумма рублей «до N ₽» (общая для бота и мини-аппа) по ВСЕМ позициям спонсорских квестов (27.11.2026, владелец): выплаты банков и клуба, скины по сумме из карточки
+     *  («любой другой скин до N ₽»), награды в EXC/EXCASH (банковских миссий, игровых партнёров со всеми этапами и доплатами, остальных спонсорских квестов) по курсу 100 = 1 ₽. */
     public long bankRub(AppUser user, List<Quest> quests) {
         long sum = 0;
-        long partnerExc = 0;
+        long exc = 0;
         for (Quest q : quests) {
             PartnerMission pm = PartnerMissions.forQuest(q);
-            if (pm != null) sum += PartnerMissions.rubReward(pm);
-            // Внешние партнёрские квесты (игровые партнёры, установки): награда в EXCASH по курсу 100% (100 EXC = 1 ₽); подписки на каналы на спонсорский баланс не идут и в сумму не входят
-            else if (SponsorBalanceService.isSponsorBalanceQuest(q)) partnerExc += gameStageRewardService.remainingMaxExc(q, user == null ? null : user.getId());
+            if (pm != null) {
+                sum += PartnerMissions.rubReward(pm) + QuestSkinService.skinRub(pm);
+                // компенсация траты уже внутри rubReward, здесь только награда за отчёт и бонус после выплаты банка
+                exc += pm.rewardExc() + pm.bonusExc();
+            } else {
+                exc += gameStageRewardService.remainingMaxExc(q, user == null ? null : user.getId());
+            }
         }
         // копейки складываем вместе и отбрасываем остаток один раз: «до N ₽» не должно обещать больше, чем есть
-        return sum + partnerExc / 100;
+        return sum + exc / 100;
     }
 
     /** Есть ли среди квестов награда-скин (поле premium в ответе мини-аппу осталось с прежним именем). */

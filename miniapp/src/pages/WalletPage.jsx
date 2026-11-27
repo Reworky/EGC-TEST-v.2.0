@@ -849,7 +849,7 @@ function WithdrawView({ wallet, onChanged, initialSponsor }) {
       {wallet.sponsoredPrizeRub > 0 && (
         <div style={{ padding: '10px 16px 0' }}>
           <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}>
-            💎 Получи до <b>{wallet.sponsoredPrizeRub.toLocaleString('ru-RU')} ₽</b> и скины CS2 за спонсорские квесты.
+            💎 Получи до <b>{wallet.sponsoredPrizeRub.toLocaleString('ru-RU')} ₽</b> за спонсорские квесты, включая скины CS2.
           </div>
           <button className="quest-btn" onClick={() => navigate('/quests?section=sponsored')}>
             💎 Получить до {wallet.sponsoredPrizeRub.toLocaleString('ru-RU')} ₽
