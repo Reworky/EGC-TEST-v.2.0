@@ -1403,7 +1403,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.startsWith("ugc:banner")) {
             answerSilently(callbackQuery.getId());
-            if (data.startsWith("ugc:banner:v") || data.startsWith("ugc:banner:h")) {
+            if (data.startsWith("ugc:banner:k")) {
+                // ugc:banner:k[:id квеста] - баннер «Кейс» поверх ролика (27.11.2026)
+                String[] caseParts = data.split(":");
+                sendUgcCaseBanner(user.getTelegramId(), caseParts.length > 3 ? parseLong(caseParts[3]) : null);
+            } else if (data.startsWith("ugc:banner:v") || data.startsWith("ugc:banner:h")) {
                 // ugc:banner:v|h[:id квеста] - игрок сам выбирает формат баннера; id нужен для кнопки «Назад» под видео
                 String[] bannerParts = data.split(":");
                 Long bannerQuestId = bannerParts.length > 3 ? parseLong(bannerParts[3]) : null;
@@ -10491,6 +10495,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if ("UGC".equalsIgnoreCase(quest.getGameName()) && (ugcBannerAvailable() || ugcBannerVerticalAvailable())) {
             if (ugcBannerVerticalAvailable()) buttons.add(keyboardFactory.callback("📱 Скачать баннер: вертикальный", "ugc:banner:v:" + quest.getId()));
             if (ugcBannerAvailable()) buttons.add(keyboardFactory.callback("🖥 Скачать баннер: горизонтальный", "ugc:banner:h:" + quest.getId()));
+            if (ugcCaseBannerAvailable()) buttons.add(keyboardFactory.callback("🎁 Скачать баннер: «Кейс» поверх ролика", "ugc:banner:k:" + quest.getId()));
         }
         if (nextQuestData != null) {
             buttons.add(keyboardFactory.callback("➡️ Следующий квест", nextQuestData));
@@ -14953,7 +14958,53 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<InlineKeyboardButton> row = new ArrayList<>();
         if (ugcBannerVerticalAvailable()) row.add(keyboardFactory.callback("📱 Баннер вертикальный", "ugc:banner:v"));
         if (ugcBannerAvailable()) row.add(keyboardFactory.callback("🖥 Баннер горизонтальный", "ugc:banner:h"));
-        return row.isEmpty() ? List.of() : List.of(row);
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (!row.isEmpty()) rows.add(row);
+        if (ugcCaseBannerAvailable()) rows.add(List.of(keyboardFactory.callback("🎁 Баннер «Кейс» поверх ролика", "ugc:banner:k")));
+        return rows;
+    }
+
+    /** Анимированный баннер «Кейс» на зелёном фоне (27.11.2026, владелец): накладывается поверх ролика через «Хромакей». */
+    private static final String UGC_BANNER_CASE_RESOURCE = "ugc_banner_case.mp4";
+    private volatile String ugcBannerCaseFileId;
+
+    private boolean ugcCaseBannerAvailable() {
+        return getClass().getResource("/" + UGC_BANNER_CASE_RESOURCE) != null;
+    }
+
+    /** Отправляется файлом без распознавания типа: так Telegram не сжимает видео и не превращает ролик без звука в GIF. */
+    private void sendUgcCaseBanner(Long chatId, Long questId) {
+        try {
+            SendDocument doc = new SendDocument();
+            doc.setChatId(chatId.toString());
+            doc.setDisableContentTypeDetection(true);
+            if (ugcBannerCaseFileId != null) {
+                doc.setDocument(new InputFile(ugcBannerCaseFileId));
+            } else {
+                try (java.io.InputStream is = getClass().getResourceAsStream("/" + UGC_BANNER_CASE_RESOURCE)) {
+                    if (is == null) throw new java.io.IOException(UGC_BANNER_CASE_RESOURCE + " not found");
+                    doc.setDocument(new InputFile(new java.io.ByteArrayInputStream(is.readAllBytes()), "EGC_banner_case.mp4"));
+                }
+            }
+            doc.setCaption("🎁 <b>Баннер «Кейс»: ставится поверх твоего ролика</b>\n\n"
+                    + "Зелёный фон убирается в CapCut:\n"
+                    + "1️⃣ Сохрани файл в галерею и открой свой ролик.\n"
+                    + "2️⃣ Поставь ползунок на 6-ю секунду.\n"
+                    + "3️⃣ «Оверлей» → «Добавить оверлей» → выбери баннер.\n"
+                    + "4️⃣ Выдели баннер → «Удалить фон» → «Хромакей».\n"
+                    + "5️⃣ Наведи пипетку на зелёный и увеличивай «Интенсивность», пока он не исчезнет. Не переборщи, чтобы не пропал сам баннер.\n"
+                    + "6️⃣ Поставь баннер сверху или по центру, не у краёв.\n\n"
+                    + "Баннер длится 11 секунд: не обрезай и не ускоряй его. Названия кнопок зависят от версии CapCut.");
+            doc.setParseMode("HTML");
+            if (questId != null) {
+                doc.setReplyMarkup(keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("⬅️ Назад", "ugc:back:" + questId)))));
+            }
+            org.telegram.telegrambots.meta.api.objects.Message sent = execute(doc);
+            if (ugcBannerCaseFileId == null && sent.getDocument() != null) ugcBannerCaseFileId = sent.getDocument().getFileId();
+        } catch (Exception e) {
+            log.warn("Failed to send UGC case banner", e);
+            sendText(chatId, "⚠️ Не получилось прислать баннер. Попробуй ещё раз чуть позже или напиши в поддержку.", null);
+        }
     }
 
     private boolean ugcBannerAvailable() {
@@ -15036,8 +15087,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** «Как это работает» раздела UGC: четыре шага, правила и разница между вертикальными и горизонтальными роликами. */
     private void sendUgcHowItWorks(AppUser user) {
         String text = "📖 <b>Как это работает</b>\n\n"
-                + "1️⃣ Скачай баннер: вертикальный или горизонтальный, любой подойдёт.\n"
-                + "2️⃣ Вставь баннер в видео на 6-й секунде на все 10 секунд: на весь экран или поверх своего ролика, сверху или по центру. Главное, чтобы он был виден целиком, не обрезан и не ускорен.\n"
+                + "1️⃣ Скачай любой баннер по кнопке: вертикальный, горизонтальный или «Кейс» поверх ролика.\n"
+                + "2️⃣ Вставь его в видео с 6-й секунды, на весь экран или поверх своего ролика (сверху или по центру). Главное, чтобы он был виден целиком, не обрезан и не ускорен. У «Кейса» убери зелёный фон.\n"
                 + "3️⃣ Опубликуй видео и размести реферальную ссылку в описании, комментарии или в самом видео. Ссылка лежит в разделе «Реферальная программа».\n"
                 + "4️⃣ Возьми квест нужной площадки и пришли ссылку на ролик. Отправляй, когда ролик уже набрал просмотры: считаем один раз, в момент проверки.\n\n"
                 + "📱 Вертикальные ролики: Reels, TikTok, YouTube Shorts.\n"

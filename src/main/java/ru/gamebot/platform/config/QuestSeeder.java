@@ -4643,9 +4643,11 @@ public class QuestSeeder implements CommandLineRunner {
     /** Шаги 1-2 инструкции UGC-квестов (21.11.2026, владелец): любой из двух баннеров, на весь экран или поверх ролика. */
     private static final String UGC_STEP1_OLD = "1️⃣ Скачай баннер: кнопка «🎬 Скачать баннер».";
     private static final String UGC_STEP1_PREV = "1️⃣ Скачай баннер: вертикальный или горизонтальный, любой подойдёт.";
-    private static final String UGC_STEP1_NEW = "1️⃣ Скачай баннер: вертикальный или горизонтальный.";
+    private static final String UGC_STEP1_PREV2 = "1️⃣ Скачай баннер: вертикальный или горизонтальный.";
+    private static final String UGC_STEP1_NEW = "1️⃣ Скачай любой баннер по кнопке.";
     private static final String UGC_STEP2_OLD = "2️⃣ Вставь его в видео на 6-й секунде, целиком, без обрезки и ускорения.";
-    private static final String UGC_STEP2_NEW = "2️⃣ Вставь баннер в видео на 6-й секунде на все 10 секунд: на весь экран или поверх своего ролика, сверху или по центру. Главное, чтобы он был виден целиком, не обрезан и не ускорен.";
+    private static final String UGC_STEP2_PREV = "2️⃣ Вставь баннер в видео на 6-й секунде на все 10 секунд: на весь экран или поверх своего ролика, сверху или по центру. Главное, чтобы он был виден целиком, не обрезан и не ускорен.";
+    private static final String UGC_STEP2_NEW = "2️⃣ Вставь его с 6-й секунды, на весь экран или поверх ролика (сверху или по центру), целиком, без обрезки и ускорения.";
     /** Карточка с баннером обязана укладываться в подпись фото (1000 знаков): шкала наград осталась только в шаге 5, описание и условия сжаты (21.11.2026). */
     private static final String UGC_DESC_OLD = " просмотров: чем больше просмотров, тем выше награда, от 3 000 до 25 000 EXC.";
     private static final String UGC_DESC_NEW = " просмотров.";
@@ -4662,8 +4664,10 @@ public class QuestSeeder implements CommandLineRunner {
         questRepository.findFirstByTitleAndGameName(title, "UGC").ifPresent(q -> {
             boolean changed = false;
             String instruction = q.getInstruction();
-            if (instruction != null && (instruction.contains(UGC_STEP1_OLD) || instruction.contains(UGC_STEP1_PREV) || instruction.contains(UGC_STEP2_OLD))) {
-                q.setInstruction(instruction.replace(UGC_STEP1_OLD, UGC_STEP1_NEW).replace(UGC_STEP1_PREV, UGC_STEP1_NEW).replace(UGC_STEP2_OLD, UGC_STEP2_NEW));
+            if (instruction != null && (instruction.contains(UGC_STEP1_OLD) || instruction.contains(UGC_STEP1_PREV) || instruction.contains(UGC_STEP2_OLD)
+                    || instruction.contains(UGC_STEP1_PREV2) || instruction.contains(UGC_STEP2_PREV))) {
+                q.setInstruction(instruction.replace(UGC_STEP1_OLD, UGC_STEP1_NEW).replace(UGC_STEP1_PREV, UGC_STEP1_NEW).replace(UGC_STEP2_OLD, UGC_STEP2_NEW)
+                        .replace(UGC_STEP1_PREV2, UGC_STEP1_NEW).replace(UGC_STEP2_PREV, UGC_STEP2_NEW));
                 changed = true;
             }
             String instructionNow = q.getInstruction();
