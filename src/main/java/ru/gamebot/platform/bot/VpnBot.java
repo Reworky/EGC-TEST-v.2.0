@@ -80,6 +80,7 @@ public class VpnBot extends TelegramLongPollingBot {
 
     private final Vpn2Service vpn;
     private final AdminService adminService;
+    private final ru.gamebot.platform.service.NewbieFunnelService newbieFunnel;
     private final AppProperties appProperties;
     private final UserService userService;
     private final ExcTransactionService excTransactionService;
@@ -233,8 +234,10 @@ public class VpnBot extends TelegramLongPollingBot {
                 } catch (NumberFormatException ignored) {
                     // битая ссылка: просто без реферера
                 }
-            } else if (parts.length > 1 && "from_egc".equals(parts[1])) {
+            } else if (parts.length > 1 && ("from_egc".equals(parts[1]) || "from_egc_offer".equals(parts[1]))) {
                 source = "egc"; // пришёл из игрового бота EGC
+                newbieFunnel.log(uid, ru.gamebot.platform.service.NewbieFunnelService.VPN_OPEN);
+                if ("from_egc_offer".equals(parts[1])) newbieFunnel.log(uid, ru.gamebot.platform.service.NewbieFunnelService.OFFER_VPN_TAP);
             } else if (parts.length > 1 && parts[1].startsWith("from_bc_")) {
                 source = parts[1].substring(5); // рассылка про VPN: bc_a / bc_b (волна 1, варианты текста), bc_w2 (волна 2)
             } else if (parts.length > 1 && parts[1].startsWith("pay_") && isAdmin(uid)) {

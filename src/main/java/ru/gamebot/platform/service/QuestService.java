@@ -1638,6 +1638,8 @@ public class QuestService {
 
         // Квест сезонного события: проверка порогов 80%/100% потолка затрат (ошибка здесь не должна ломать начисление).
         seasonalEventService.onQuestApproved(quest);
+        // Предложения после наград (RewardOfferService): уходят после коммита и с задержкой, чтобы не обгонять «Квест засчитан»
+        eventPublisher.publishEvent(new ru.gamebot.platform.event.QuestRewardedEvent(this, user.getId(), submission.getId()));
 
         return submission;
     }

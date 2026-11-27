@@ -37,7 +37,10 @@ public class NewbieFunnelService {
             // куда ещё нажимали в разделе спонсорских квестов и просмотр карточки любого спонсорского квеста
             GAME_LIST = "game_list", GAME_CARD = "game_card", SP_OTHER = "sp_other", SP_PICKS = "sp_picks", SP_MYQ = "sp_myq", SP_ANY_CARD = "sp_any_card",
             // 23.11.2026: нажатие «Взять» ДО подтверждения «мне 18+» и сигналы витрины банков (открыла страницу, раскрыла карточку, нажала на оффер) - приходят с витрины по номеру заявки (?sid=)
-            BANK_TAKE_TAP = "bank_take_tap", LP_VIEW = "lp_view", LP_CARD = "lp_card", LP_CLICK = "lp_click";
+            BANK_TAKE_TAP = "bank_take_tap", LP_VIEW = "lp_view", LP_CARD = "lp_card", LP_CLICK = "lp_click",
+            // 27.11.2026: предложения после наград (увидел / нажал) и открытие разделов VPN и UGC; считаются за период по времени события, не по когорте
+            OFFER_SP_SHOWN = "offer_sp_shown", OFFER_SP_TAP = "offer_sp_tap", OFFER_VPN_SHOWN = "offer_vpn_shown", OFFER_VPN_TAP = "offer_vpn_tap",
+            OFFER_UGC_SHOWN = "offer_ugc_shown", OFFER_UGC_TAP = "offer_ugc_tap", VPN_OPEN = "vpn_open", UGC_SECTION = "ugc_section";
 
     private static final int CACHE_LIMIT = 300_000;
 
@@ -152,6 +155,7 @@ public class NewbieFunnelService {
         m.put("w2", ev(W2));
         m.put("w3", ev(W3));
         m.put("wskip", ev(W_SKIP));
+        m.put("wdone", ev(W_DONE));
         m.put("choice", ev(CHOICE_SHOWN));
         m.put("cards", ev(CHOICE_CARDS));
         m.put("games", ev(CHOICE_GAMES));
@@ -196,7 +200,7 @@ public class NewbieFunnelService {
     }
 
     /** Колонки таблиц «по источникам» (после источника и числа пришедших): ключи метрик без параметра ?3. */
-    public static final List<String> SOURCE_KEYS = List.of("w3", "choice", "cards", "games", "menu",
+    public static final List<String> SOURCE_KEYS = List.of("wdone", "choice", "cards", "games", "menu",
             "sp_section", "sp_debit", "bank_card", "take_tap", "take18", "bank_taken", "apply", "lp_view", "lp_card", "lp_click", "lg_lead", "lg_ok", "lg_rej", "bank_ok", "bank_paid",
             "picker", "game_list", "game_card", "game_taken", "game_ok");
 
@@ -256,6 +260,17 @@ public class NewbieFunnelService {
         }
     }
 
+    /** Сколько игроков впервые дошли до шага за период (по времени события): для шагов, которые проходят и старые игроки. */
+    public long playersWithStep(String step, LocalDateTime from, LocalDateTime to) {
+        try {
+            return ((Number) entityManager.createNativeQuery("SELECT COUNT(DISTINCT telegram_id) FROM funnel_events WHERE step = ?1 AND created_at >= ?2 AND created_at < ?3")
+                    .setParameter(1, step).setParameter(2, from).setParameter(3, to).getSingleResult()).longValue();
+        } catch (Exception e) {
+            log.warn("[NewbieFunnel] step count failed for {}", step, e);
+            return 0;
+        }
+    }
+
     private static final Map<String, String> STEP_LABELS = new LinkedHashMap<>();
     static {
         STEP_LABELS.put(W1, "Слайд 1");
@@ -286,6 +301,14 @@ public class NewbieFunnelService {
         STEP_LABELS.put(GAME_LIST, "Список квестов игры");
         STEP_LABELS.put(GAME_CARD, "Карточка игрового квеста");
         STEP_LABELS.put(STARTER_CARD, "Стартовая карточка (старый сценарий)");
+        STEP_LABELS.put(OFFER_SP_SHOWN, "Увидел предложение спонсорских квестов");
+        STEP_LABELS.put(OFFER_SP_TAP, "Нажал на предложение спонсорских квестов");
+        STEP_LABELS.put(OFFER_VPN_SHOWN, "Увидел предложение VPN");
+        STEP_LABELS.put(OFFER_VPN_TAP, "Нажал на предложение VPN");
+        STEP_LABELS.put(OFFER_UGC_SHOWN, "Увидел предложение UGC");
+        STEP_LABELS.put(OFFER_UGC_TAP, "Нажал на предложение UGC");
+        STEP_LABELS.put(VPN_OPEN, "Открыл VPN-бот из EGC");
+        STEP_LABELS.put(UGC_SECTION, "Открыл раздел UGC");
     }
 
     /** Путь одного игрока (команда /journey): шаги воронки со временем, квесты и статусы заявок. Строки уже без HTML-экранирования - экранирует вызывающий. */

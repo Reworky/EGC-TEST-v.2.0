@@ -1034,9 +1034,7 @@ public class AnalyticsService {
         t.append("<pre>");
         funnelRow(t, "Пришли (/start)", started, started, null);
         funnelRow(t, "Слайд 1", c.get("w1"), started, started);
-        funnelRow(t, "Слайд 2", c.get("w2"), started, c.get("w1"));
-        funnelRow(t, "Слайд 3", c.get("w3"), started, c.get("w2"));
-        funnelRow(t, "Нажали «Пропустить»", c.get("wskip"), started, null);
+        funnelRow(t, "Нажали «Дальше»", c.get("wdone"), started, c.get("w1"));
         funnelRow(t, "Экран выбора пути", c.get("choice"), started, started);
         funnelRow(t, "  выбрали Карты", c.get("cards"), started, c.get("choice"));
         funnelRow(t, "  выбрали Игры", c.get("games"), started, c.get("choice"));
@@ -1092,8 +1090,20 @@ public class AnalyticsService {
         t.append("</pre>");
         extras.add(t.toString());
 
-        extras.add(sourceTable("По источникам: старт и выбор пути", r, new String[]{"приш", "сл.3", "выбор", "карты", "игры", "меню"},
-                new String[]{"", "w3", "choice", "cards", "games", "menu"}));
+        // Предложения и разделы проходят и старые игроки, поэтому считаются по времени события за выбранный период, а не по когорте
+        StringBuilder o = new StringBuilder("<b>VPN, UGC и предложения после наград</b>\n<i>Игроки, впервые дошедшие до шага за период.</i>\n<pre>");
+        String[][] offerSteps = {{"Спонс.: увидели", NewbieFunnelService.OFFER_SP_SHOWN}, {"  нажали", NewbieFunnelService.OFFER_SP_TAP},
+                {"VPN: увидели", NewbieFunnelService.OFFER_VPN_SHOWN}, {"  нажали", NewbieFunnelService.OFFER_VPN_TAP},
+                {"UGC: увидели", NewbieFunnelService.OFFER_UGC_SHOWN}, {"  нажали", NewbieFunnelService.OFFER_UGC_TAP},
+                {"Открыли VPN-бот", NewbieFunnelService.VPN_OPEN}, {"Открыли раздел UGC", NewbieFunnelService.UGC_SECTION}};
+        for (String[] step : offerSteps) {
+            o.append(String.format(RU, "%-20s %5d%n", step[0], newbieFunnel.playersWithStep(step[1], p.from(), p.to())));
+        }
+        o.append("</pre><i>«Открыли VPN-бот» - переходы по ссылкам из EGC (кнопки меню, магазина и предложения): само нажатие на кнопку-ссылку Telegram боту не сообщает.</i>");
+        extras.add(o.toString());
+
+        extras.add(sourceTable("По источникам: старт и выбор пути", r, new String[]{"приш", "дальше", "выбор", "карты", "игры", "меню"},
+                new String[]{"", "wdone", "choice", "cards", "games", "menu"}));
         extras.add(sourceTable("По источникам: путь карты до «Взять»", r, new String[]{"карты", "разд", "дебет", "карт.б", "взять", "взяли"},
                 new String[]{"cards", "sp_section", "sp_debit", "bank_card", "take18", "bank_taken"}));
         extras.add(sourceTable("По источникам: от «Взять» до заявки в банке (витрина и постбек LeadGid)", r, new String[]{"взяли", "витр", "карт", "оффер", "лид", "одобр"},

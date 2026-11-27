@@ -1558,6 +1558,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleOnboardingCallback(callbackQuery, user, data.substring("onboarding:".length()));
             return;
         }
+        if (data.startsWith("offer:")) {
+            answerSilently(callbackQuery.getId());
+            if ("offer:sp".equals(data)) {
+                fn(user, ru.gamebot.platform.service.NewbieFunnelService.OFFER_SP_TAP);
+                sendSponsoredCategories(user);
+            } else if ("offer:ugc".equals(data)) {
+                fn(user, ru.gamebot.platform.service.NewbieFunnelService.OFFER_UGC_TAP);
+                sendUgcHowItWorks(user);
+            }
+            return;
+        }
         if (data.startsWith("welcome:")) {
             handleWelcomeStoriesCallback(user, data.substring("welcome:".length()));
             return;
@@ -5739,13 +5750,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Единственный слайд новичка (27.11.2026, текст владельца); три прежних слайда остались только в «🎬 Как это работает» (режим r). */
+    private static final String[][] NEWBIE_SLIDES = {
+            {"👋 <b>Привет, я Экси!</b>\n\n"
+                    + "В EGC можно получать награды за задания партнёров и за квесты в играх.\n\n"
+                    + "Деньги, скины CS2, донат: у каждого квеста своя награда, она написана на карточке."}};
+
     private void sendWelcomeSlide(AppUser user, String mode, int n) {
-        int total = WELCOME_SLIDES.length;
+        boolean newbie = "f".equals(mode);
+        String[][] slides = newbie ? NEWBIE_SLIDES : WELCOME_SLIDES;
+        int total = slides.length;
         n = Math.max(1, Math.min(total, n));
         if ("f".equals(mode)) fn(user, "welcome_" + n);
         StringBuilder dots = new StringBuilder();
         for (int i = 1; i <= total; i++) dots.append(i == n ? "●" : "○").append(i < total ? " " : "");
-        String text = WELCOME_SLIDES[n - 1][0] + "\n\n" + dots;
+        String text = slides[n - 1][0] + (total > 1 ? "\n\n" + dots : "");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         if (n < total) {
             List<InlineKeyboardButton> navRow = new ArrayList<>();
@@ -5754,9 +5773,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(navRow);
             rows.add(List.of(keyboardFactory.callback("Пропустить", "welcome:" + mode + ":skip")));
         } else {
-            rows.add(List.of(keyboardFactory.callback("🚀 Начать играть", "welcome:" + mode + ":done")));
+            rows.add(List.of(keyboardFactory.callback(newbie ? "Дальше ▶️" : "🚀 Начать играть", "welcome:" + mode + ":done")));
         }
-        String banner = "welcome_" + n + ".jpg";
+        String banner = newbie ? "welcome_start_banner.jpg" : "welcome_" + n + ".jpg";
         if (getClass().getResource("/" + banner) != null) {
             sendResourceBanner(user.getTelegramId(), banner, text, keyboardFactory.rowsLayout(rows));
         } else {
@@ -5831,26 +5850,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  fresh=true - сразу после регистрации (с приветствием и стартовым бонусом); false - возврат к незавершённому онбордингу.
      *  Счётчики воронки - welcome.stat.choice_shown / choice_cards / choice_games (scripts/check-welcome-stories.sql). */
     private void sendOnboardingChoice(AppUser user, boolean fresh) {
+        if (fresh) {
+            welcomeStat("choice_shown");
+            fn(user, ru.gamebot.platform.service.NewbieFunnelService.CHOICE_SHOWN);
+        }
         clearOnboardingBrowseBack(user);
-        welcomeStat("choice_shown");
-        fn(user, ru.gamebot.platform.service.NewbieFunnelService.CHOICE_SHOWN);
-        // Текст и разметка владельца 26.11.2026 (голос Экси): жирные заголовки, описания путей цитатами; сумма «до N ₽» с этого экрана убрана
-        String text = (fresh
-                ? "<b>👋 Привет, я Экси! Добро пожаловать в EGC.</b>\n\n"
-                        + "🎁 " + WELCOME_BONUS_EXC + " EXC уже на твоём балансе, это подарок.\n\n"
-                : "")
+        long sum = sponsoredPrizeRub(user);
+        String text = (fresh ? "🎁 " + WELCOME_BONUS_EXC + " EXC уже на твоём балансе, это подарок.\n\n" : "")
                 + "<b>С чего начнём?</b>\n\n"
-                + "<b>💳 Деньги на карту</b>\n"
-                + "<blockquote>Спонсорские квесты: задания от партнёров. Выполнять их бесплатно.</blockquote>\n\n"
+                + "<b>💳 Спонсорские квесты</b>\n"
+                + "<blockquote>Задания партнёров с наградами" + (sum > 0 ? " на сумму <b>до " + fmtExc(sum) + " ₽</b>: деньги и скины CS2" : "")
+                + ". Выполнять задания бесплатно, у некоторых для награды нужна покупка. Условия указаны на карточке.</blockquote>\n\n"
                 + "<b>🎮 Играть и копить</b>\n"
-                + "<blockquote>CS2, PUBG PC и другие игры. Выполняй квесты, копи EXC, трать на донат, скины или выводи.</blockquote>\n\n"
+                + "<blockquote>CS2, PUBG PC и другие игры. Выполняй квесты, копи EXC, трать на донат и скины или выводи.</blockquote>\n\n"
                 + "Другой путь всегда есть в меню 😉";
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
-                List.of(keyboardFactory.callback("💳 Спонсорские квесты", "onboarding:cards")),
+                List.of(keyboardFactory.callback("💳 Спонсорские квесты" + (sum > 0 ? " · до " + fmtExc(sum) + " ₽" : ""), "onboarding:cards")),
                 List.of(keyboardFactory.callback("🎮 Играть и копить EXC", "onboarding:games")),
                 List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))));
         // Всегда с баннером (и при возврате): экраны выбора пути, игр и спонсорских квестов - картинки, поэтому между ними правка на месте, а не новое сообщение
-        sendResourceBanner(user.getTelegramId(), "welcome_start_banner.jpg", text, keyboard);
+        sendResourceBanner(user.getTelegramId(), "choice_start_banner.jpg", text, keyboard);
     }
 
     /** fresh=true - сразу после регистрации (приветствие + стартовый бонус); false - возврат к незавершённому онбордингу
@@ -6940,6 +6959,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return keyboardFactory.url("🔐 EGC VPN: скидка за EXC", link);
         }
         return keyboardFactory.callback(vpnService.isEnabled() ? "🔐 VPN" : "🔐 VPN (скоро)", "menu:vpn");
+    }
+
+    /** Кнопка VPN в главном меню: цену показываем, только когда новый VPN-бот игроку доступен. */
+    private InlineKeyboardButton vpnMenuButton(AppUser user) {
+        String link = vpnBotLinkFor(user);
+        if (link != null) return keyboardFactory.url("🔐 EGC VPN · от 50 ₽ в неделю", link);
+        return keyboardFactory.callback(vpnService.isEnabled() ? "🔐 EGC VPN" : "🔐 EGC VPN (скоро)", "menu:vpn");
     }
 
     /** Строка про VPN в профиле (с переводом строки в конце): срок ключа или приглашение попробовать; пусто, пока отдельный бот игроку не виден. */
@@ -9821,6 +9847,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendUgcQuestList(AppUser user) {
+        fn(user, ru.gamebot.platform.service.NewbieFunnelService.UGC_SECTION);
         sendQuestList(user, "UGC", null, "menu:main");
     }
 
@@ -28012,6 +28039,46 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    // ─── Предложения после наград (27.11.2026, тексты владельца): кому и когда слать, решает RewardOfferService ───
+
+    /** Спонсорские квесты после первой игровой награды. false - слать нечего (нет доступных наград) или сообщение не ушло. */
+    public boolean sendSponsorOffer(AppUser user) {
+        long sum = sponsoredPrizeRub(user);
+        if (sum <= 0) return false;
+        return sendOffer(user, "💎 <b>Первая награда есть!</b>\n\n"
+                + "У партнёров клуба есть задания с наградами на сумму до " + fmtExc(sum) + " ₽: деньги и скины CS2. Условия указаны на карточке каждого квеста.",
+                keyboardFactory.callback("💎 Посмотреть задания", "offer:sp"), ru.gamebot.platform.service.NewbieFunnelService.OFFER_SP_SHOWN);
+    }
+
+    /** VPN: только тем, кому виден новый VPN-бот и у кого ещё нет ключа. Нажатие считает VPN-бот по метке from_egc_offer. */
+    public boolean sendVpnOffer(AppUser user) {
+        if (vpnBotLinkFor(user) == null || vpn2Service.find(user.getTelegramId()).isPresent()
+                || vpnAccountRepository.findByTelegramId(user.getTelegramId()).isPresent()) return false;
+        return sendOffer(user, "🔐 <b>У клуба есть свой VPN</b>\n\n"
+                + ru.gamebot.platform.service.Vpn2Service.daysText(vpn2Service.getTrialDays()) + " бесплатно, дальше от 50 ₽ в неделю. На оплату можно получить скидку за EXC.",
+                keyboardFactory.url("🔐 Попробовать бесплатно", "https://t.me/" + vpn2Service.getBotUsername() + "?start=from_egc_offer"),
+                ru.gamebot.platform.service.NewbieFunnelService.OFFER_VPN_SHOWN);
+    }
+
+    /** UGC: только пока за ролики платим в EXCASH (в тексте рубли). */
+    public boolean sendUgcOffer(AppUser user) {
+        if (!ugcPilotService.isActive()) return false;
+        return sendOffer(user, "🤳 <b>Снимай ролики о клубе</b>\n\n"
+                + "До " + ugcMaxRub() + " ₽ за ролик: сумма зависит от просмотров. До 500 просмотров платим 3 000 EXC. В ролике нужны наш баннер и твоя реферальная ссылка.",
+                keyboardFactory.callback("🤳 Как это работает", "offer:ugc"), ru.gamebot.platform.service.NewbieFunnelService.OFFER_UGC_SHOWN);
+    }
+
+    private boolean sendOffer(AppUser user, String text, InlineKeyboardButton button, String shownStep) {
+        try {
+            notifyUser(user.getTelegramId(), text, button);
+            fn(user, shownStep);
+            return true;
+        } catch (Exception e) {
+            log.warn("Reward offer failed for {}: {}", user.getTelegramId(), e.getMessage());
+            return false;
+        }
+    }
+
     @org.springframework.context.event.EventListener
     public void onExternalQuestApproved(ru.gamebot.platform.event.ExternalQuestApprovedEvent event) {
         try {
@@ -32878,9 +32945,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Главное меню игрока — «одна цель + 4 кнопки» (2026-10-10, по образцу Mistplay): главное действие, задания дня
         // с наградой, деньги, люди, а всё остальное — в «⋯ Ещё» (см. sendMoreCategory).
         // 15.11.2026 (владелец): вместо «🎯 Играть» - сразу «Игровые квесты» и «Спонсорские квесты» (с суммой), затем «Задания дня»; кнопка «Квест от спонсора» стала лишней
-        rows.add(List.of(keyboardFactory.callback("🎮 Игровые квесты", "quests:section:gaming")));
+        // 27.11.2026 (владелец): порядок под монетизацию - Спонсорские, VPN, Игровые квесты, UGC
         rows.add(List.of(keyboardFactory.callback(sponsoredMenuLabel(user), "quests:section:sponsored")));
-        // 19.11.2026 (владелец): UGC перенесён из «Ещё» на главное меню, под «Спонсорские квесты»
+        rows.add(List.of(vpnMenuButton(user)));
+        rows.add(List.of(keyboardFactory.callback("🎮 Игровые квесты", "quests:section:gaming")));
         rows.add(List.of(keyboardFactory.callback(ugcPilotService.isActive() ? "🤳 UGC · до " + ugcMaxRub() + " ₽ за ролик" : "🤳 UGC · до 25 000 EXC", "quests:section:ugc")));
         if (userService.dailyTasksEnabled()) {
             rows.add(List.of(keyboardFactory.callback(dailyTasksMenuLabel(user), "menu:dtasks")));
