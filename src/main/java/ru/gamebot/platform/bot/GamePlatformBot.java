@@ -5860,9 +5860,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "<b>С чего начнём?</b>\n\n"
                 + "<b>💳 Спонсорские квесты</b>\n"
                 + "<blockquote>Задания партнёров с наградами" + (sum > 0 ? " на сумму <b>до " + fmtExc(sum) + " ₽</b>: деньги и скины CS2" : "")
-                + ". Выполнять задания бесплатно, у некоторых для награды нужна покупка. Условия указаны на карточке.</blockquote>\n\n"
+                + ".\nВыполнять задания бесплатно. Условия указаны на карточке.</blockquote>\n\n\n"
                 + "<b>🎮 Играть и копить</b>\n"
-                + "<blockquote>CS2, PUBG PC и другие игры. Выполняй квесты, копи EXC, трать на донат и скины или выводи.</blockquote>\n\n"
+                + "<blockquote>CS2, PUBG PC и другие игры. Выполняй квесты, копи EXC, трать на донат и скины или выводи.</blockquote>\n\n\n"
                 + "Другой путь всегда есть в меню 😉";
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("💳 Спонсорские квесты" + (sum > 0 ? " · до " + fmtExc(sum) + " ₽" : ""), "onboarding:cards")),
