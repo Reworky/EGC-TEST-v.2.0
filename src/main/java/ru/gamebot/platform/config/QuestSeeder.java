@@ -2496,12 +2496,51 @@ public class QuestSeeder implements CommandLineRunner {
             log.info("[QuestSeeder] Game offer quest created: Путь Судьбы на ПК (landing), reward {} EXC", PATHOFDOOMPC_REWARD_EXC);
         }
 
+        // ── Игровой оффер: Вызов Древних / Elden Quest (Admitad), 28.11.2026 ──
+        // Одна цель «Регистрация»: Россия 80 ₽, остальные страны 56 ₽. Игроку 30%: 16,80 ₽ - награда квеста, за Россию доплата до 24 ₽ (GameStageRewardService).
+        // Тестовый лимит рекламодателя - 100 регистраций. МОБИЛЬНЫЙ ТРАФИК ЗАПРЕЩЁН правилами программы - на карточке требуем компьютер.
+        gameCatalogService.setDifficultyMode("Вызов Древних", "FLAT", ELDENQUEST_REWARD_EXC, 0);
+        if (appSettingRepository.findById(ELDENQUEST_CARD_KEY).isEmpty()) {
+            Quest eq = questRepository.findFirstByTitleAndGameName(ELDENQUEST_TITLE, "Вызов Древних").orElse(null);
+            if (eq == null) {
+                eq = new Quest();
+                eq.setGameName("Вызов Древних");
+                eq.setTitle(ELDENQUEST_TITLE);
+                eq.setParticipantLimit(100);
+                eq.setActive(false);
+                eq.setCreatedAt(LocalDateTime.now());
+            }
+            eq.setPlatform("ПК · браузер");
+            eq.setDurationDays(0);
+            eq.setDurationText("Бессрочно");
+            eq.setRewardXp(0);
+            eq.setRewardCoins(ELDENQUEST_REWARD_EXC);
+            eq.setDescription("Браузерная фэнтези RPG, играть нужно с компьютера. Зарегистрируйся в игре: награду начислим, когда партнёр подтвердит регистрацию.");
+            eq.setInstruction("Открой страницу игры с компьютера и зарегистрируйся:\n"
+                    + "https://igro-afisha.pages.dev/?tg={TG_ID}#eldenquest\n\n"
+                    + "Только с компьютера: регистрацию с телефона партнёр не засчитает. Награда: 24 ₽ из России, 16,80 ₽ из других стран.");
+            eq.setRequirements("📎 Как получить\n"
+                    + "1. Нажми «Взять» и открой страницу игры только с компьютера: регистрацию с телефона партнёр не засчитает.\n"
+                    + "2. Зарегистрируйся новым аккаунтом по этой ссылке.\n\n"
+                    + "16+. Страны: Россия, Беларусь, Казахстан и другие страны СНГ и Балтии.\n"
+                    + "💰 Рубли начислим в EXCASH, они выводятся без лимитов.");
+            eq.setExternalAutoApprove(true);
+            eq.setExternalOfferId("eldenquest");
+            eq.setExternalNetwork("landing");
+            eq.setExternalTargetType("REGISTRATION");
+            eq.setExternalMinPaymentRub(null);
+            questRepository.save(eq);
+            saveSetting(ELDENQUEST_CARD_KEY);
+            log.info("[QuestSeeder] Game offer quest created: Вызов Древних (landing), reward {} EXC", ELDENQUEST_REWARD_EXC);
+        }
+
         // 26.11.2026 (владелец: «включи квесты вместе с деплоем»): «Родина РП» и Sacralium включаются один раз; выключенный потом вручную квест сидер обратно не включает
         enableGameOfferOnce(RODINA_TITLE, "Родина РП", "quest.enable.rodina.v1");
         enableGameOfferOnce(SACRALIUM_TITLE, "Sacralium", "quest.enable.sacralium.v1");
         enableGameOfferOnce(JADE_TITLE, "Нефритовое Царство", "quest.enable.jade.v1");
         enableGameOfferOnce(ARMORED_TITLE, "Armored Warfare", "quest.enable.armored.v1");
         enableGameOfferOnce(PATHOFDOOMPC_TITLE, "Путь Судьбы на ПК", "quest.enable.pathofdoompc.v1");
+        enableGameOfferOnce(ELDENQUEST_TITLE, "Вызов Древних", "quest.enable.eldenquest.v1");
         enableGameOfferOnce(DEMONSLAYER_TITLE, "Охотник на Демонов", "quest.enable.demonslayer.v1");
         enableGameOfferOnce(PATHOFDOOM_TITLE, "Путь Судьбы", "quest.enable.pathofdoom.v1");
         enableGameOfferOnce(DRAGONEGG_TITLE, "Яйцо Дракона", "quest.enable.dragonegg.v1");   // с 26.11.2026 новые игровые квесты включаются сразу (решение владельца)
@@ -3734,6 +3773,10 @@ public class QuestSeeder implements CommandLineRunner {
     private static final String PATHOFDOOMPC_TITLE = "Путь Судьбы на ПК: зайди в игру";
     private static final long PATHOFDOOMPC_REWARD_EXC = 2_400L;
     private static final String PATHOFDOOMPC_CARD_KEY = "pathofdoompc.card.v1.done";
+
+    private static final String ELDENQUEST_TITLE = "Вызов Древних: зарегистрируйся";
+    private static final long ELDENQUEST_REWARD_EXC = 1_680L;
+    private static final String ELDENQUEST_CARD_KEY = "eldenquest.card.v1.done";
 
     private static final String DRAGONEGG_TITLE = "Яйцо Дракона: зарегистрируйся";
     private static final long DRAGONEGG_REWARD_EXC = 1_440L;
