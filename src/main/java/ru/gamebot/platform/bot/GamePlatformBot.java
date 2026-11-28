@@ -15884,9 +15884,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         session.getData().put("pendingRewardId", String.valueOf(reward.getId()));
         sendText(user.getTelegramId(),
                 "📋 <b>Для оформления заявки нужны ваши данные</b>\n\n"
-                        + escape(reward.getUserDataPrompt()),
+                        + (cs2ItemImage(reward) != null ? cs2TradePromptHtml(reward) : escape(reward.getUserDataPrompt())),
                 cancelKeyboard());
         answerSilently(callbackQuery.getId());
+    }
+
+    /** Запрос ссылки обмена Steam для кейса, капсулы и скина CS2 с оформлением по макету владельца (28.11.2026): курсив, абзацы, условия в цитате. */
+    private String cs2TradePromptHtml(RewardItem reward) {
+        String g = reward.getPurchaseGroup();
+        boolean capsule = ru.gamebot.platform.service.Cs2CapsuleCatalog.GROUP.equals(g);
+        String noun = ru.gamebot.platform.service.Cs2SkinCatalog.GROUP.equals(g) ? "Скин" : capsule ? "Капсула" : "Кейс";
+        return "<i>Укажите вашу ссылку обмена Steam (Trade URL).</i>\n\n"
+                + "Где взять: Steam → Инвентарь → Предложения обмена → «Кто может отправлять мне предложения обмена?» → ссылка.\n\n"
+                + "<blockquote>Профиль и инвентарь должны быть открытыми, обмен на аккаунте не ограничен, а мобильный аутентификатор Steam привязан.\n\n"
+                + noun + " придёт автоматически обменом сразу после покупки: будьте у Steam, принять " + (capsule ? "её" : "его") + " нужно в течение около 5 минут.</blockquote>\n\n"
+                + "Введите ссылку:";
     }
 
     private void handleRewardPurchase(CallbackQuery callbackQuery, AppUser user, Long rewardId) {
