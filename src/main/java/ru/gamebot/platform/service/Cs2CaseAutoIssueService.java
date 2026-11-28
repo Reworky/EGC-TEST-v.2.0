@@ -155,7 +155,7 @@ public class Cs2CaseAutoIssueService {
         }
         String[] link = parseTradeUrl(s.details());
         if (link == null) {
-            fail(s, "Ссылка обмена Steam не подошла: проверьте её и оформите заявку заново.", null);
+            fail(s, "Ссылка обмена Steam не подошла.\nПроверьте её и оформите заявку заново.", null);
             return;
         }
         try {
@@ -191,11 +191,11 @@ public class Cs2CaseAutoIssueService {
         int code = r.path("code").asInt(0);
         String error = r.path("error").asText("");
         String playerMsg = switch (code) {
-            case 3, 12 -> "Ссылка обмена Steam не подошла. Возьмите ссылку заново (Steam → Инвентарь → Предложения обмена → «Кто может отправлять мне предложения обмена?») и оформите заявку ещё раз.";
-            case 5 -> "Инвентарь Steam скрыт: откройте профиль и инвентарь для всех и оформите заявку заново.";
+            case 3, 12 -> "Ссылка обмена Steam не подошла.\nВозьмите ссылку заново (Steam → Инвентарь → Предложения обмена → «Кто может отправлять мне предложения обмена?») и оформите заявку ещё раз.";
+            case 5 -> "Инвентарь Steam скрыт.\nОткройте профиль и инвентарь для всех и оформите заявку заново.";
             case 6 -> "Аккаунт Steam ограничен, выдача на него невозможна.";
-            case 7 -> "На аккаунте Steam не привязан мобильный аутентификатор, без него обмены не работают. Привяжите его и оформите заявку заново.";
-            case 21 -> "Инвентарь Steam переполнен: освободите место и оформите заявку заново.";
+            case 7 -> "На аккаунте Steam не привязан мобильный аутентификатор, без него обмены не работают.\nПривяжите его и оформите заявку заново.";
+            case 21 -> "Инвентарь Steam переполнен.\nОсвободите место и оформите заявку заново.";
             default -> "Не получилось выдать кейс автоматически.";
         };
         boolean playerFixable = code == 3 || code == 5 || code == 6 || code == 7 || code == 12 || code == 21;
@@ -313,7 +313,8 @@ public class Cs2CaseAutoIssueService {
         bot.caseAutoNotify(s.telegramId(), player, admin);
     }
 
-    /** Отклоняем заявку (EXC возвращаются), пишем игроку причину; adminDetail != null - ещё и алерт админам. */
+    /** Отклоняем заявку (EXC возвращаются), пишем игроку причину; adminDetail != null - ещё и алерт админам.
+     *  playerText: «причина» или «причина\nкак исправить» - в сообщении игроку это два отдельных абзаца. */
     private void fail(Snap s, String playerText, String adminDetail) {
         fail(s, playerText, adminDetail, false);
     }
@@ -321,7 +322,7 @@ public class Cs2CaseAutoIssueService {
     /** notAccepted - игрок не принял обмен вовремя: комментарий получает метку (блок кейсов на 30 дней), счётчик подряд идущих пропусков растёт. */
     private void fail(Snap s, String playerText, String adminDetail, boolean notAccepted) {
         try {
-            rewardService.rejectRequest(s.id(), (notAccepted ? NOT_ACCEPTED_MARKER + " " : "") + playerText);
+            rewardService.rejectRequest(s.id(), (notAccepted ? NOT_ACCEPTED_MARKER + " " : "") + playerText.replace('\n', ' '));
         } catch (IllegalArgumentException alreadyHandled) {
             return;
         } catch (Exception e) {
@@ -329,8 +330,11 @@ public class Cs2CaseAutoIssueService {
             alertAdmins("⚠️ Автовыдача кейса: не удалось отклонить и вернуть EXC по заявке М-" + s.displayId() + " (" + escape(e.getMessage()) + "). Проверьте вручную.");
             return;
         }
-        bot.caseAutoNotify(s.telegramId(), "❌ <b>" + noun(s) + " " + notIssued(s) + "</b>\n\n📦 " + escape(s.title()) + " · заявка <b>М-" + s.displayId() + "</b>\n"
-                + escape(playerText) + "\n\n🪙 <b>" + fmtExc(s.paidExc()) + " EXC</b> вернулись на баланс."
+        String[] parts = playerText.split("\n", 2);
+        bot.caseAutoNotify(s.telegramId(), "❌ <b>" + noun(s) + " " + notIssued(s) + "</b>\n\n📦 " + escape(s.title()) + " · заявка <b>М-" + s.displayId() + "</b>\n\n"
+                + "<b>Причина:</b> " + escape(parts[0])
+                + (parts.length > 1 ? "\n\n<b>Как исправить:</b> " + escape(parts[1]) : "")
+                + "\n\n🪙 <b>" + fmtExc(s.paidExc()) + " EXC</b> вернулись на баланс."
                 + (notAccepted ? "\n⏳ Кейсы и скины будут недоступны 30 дней." : ""), null);
         if (adminDetail != null) {
             alertAdmins("⚠️ Автовыдача кейса: заявка М-" + s.displayId() + " отклонена, EXC возвращены. Причина: " + escape(adminDetail));
