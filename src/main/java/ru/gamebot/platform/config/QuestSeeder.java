@@ -2534,6 +2534,45 @@ public class QuestSeeder implements CommandLineRunner {
             log.info("[QuestSeeder] Game offer quest created: Вызов Древних (landing), reward {} EXC", ELDENQUEST_REWARD_EXC);
         }
 
+        // ── Игровой оффер: Печать демонов (Admitad), 28.11.2026 ──
+        // Одна цель «Подтверждённая регистрация»: Россия 72 ₽, остальные страны 48 ₽. Игроку 30%: 14,40 ₽ - награда квеста, за Россию доплата до 21,60 ₽ (GameStageRewardService).
+        // Тестовый лимит рекламодателя - 100 регистраций. МОБИЛЬНЫЙ ТРАФИК ЗАПРЕЩЁН правилами программы - на карточке требуем компьютер, на лендинге переход с телефона закрыт.
+        gameCatalogService.setDifficultyMode("Печать демонов", "FLAT", DEMONSEAL_REWARD_EXC, 0);
+        if (appSettingRepository.findById(DEMONSEAL_CARD_KEY).isEmpty()) {
+            Quest sd = questRepository.findFirstByTitleAndGameName(DEMONSEAL_TITLE, "Печать демонов").orElse(null);
+            if (sd == null) {
+                sd = new Quest();
+                sd.setGameName("Печать демонов");
+                sd.setTitle(DEMONSEAL_TITLE);
+                sd.setParticipantLimit(100);
+                sd.setActive(false);
+                sd.setCreatedAt(LocalDateTime.now());
+            }
+            sd.setPlatform("ПК · браузер");
+            sd.setDurationDays(0);
+            sd.setDurationText("Бессрочно");
+            sd.setRewardXp(0);
+            sd.setRewardCoins(DEMONSEAL_REWARD_EXC);
+            sd.setDescription("Коллекционная RPG в восточном фэнтези, играть нужно с компьютера. Зарегистрируйся в игре: награду начислим, когда партнёр подтвердит регистрацию.");
+            sd.setInstruction("Открой страницу игры с компьютера и зарегистрируйся:\n"
+                    + "https://igro-afisha.pages.dev/?tg={TG_ID}#demonseal\n\n"
+                    + "Только с компьютера: регистрацию с телефона партнёр не засчитает. Награда: 21,60 ₽ из России, 14,40 ₽ из других стран.");
+            sd.setRequirements("📎 Как получить\n"
+                    + "1. Нажми «Взять» и открой страницу игры только с компьютера: регистрацию с телефона партнёр не засчитает.\n"
+                    + "2. Зарегистрируйся новым аккаунтом по этой ссылке.\n"
+                    + "3. Если игра попросит, подтверди регистрацию.\n\n"
+                    + "16+. Страны: Россия, Беларусь, Казахстан и другие страны СНГ и Балтии.\n"
+                    + "💰 Рубли начислим в EXCASH, они выводятся без лимитов.");
+            sd.setExternalAutoApprove(true);
+            sd.setExternalOfferId("demonseal");
+            sd.setExternalNetwork("landing");
+            sd.setExternalTargetType("REGISTRATION");
+            sd.setExternalMinPaymentRub(null);
+            questRepository.save(sd);
+            saveSetting(DEMONSEAL_CARD_KEY);
+            log.info("[QuestSeeder] Game offer quest created: Печать демонов (landing), reward {} EXC", DEMONSEAL_REWARD_EXC);
+        }
+
         // 26.11.2026 (владелец: «включи квесты вместе с деплоем»): «Родина РП» и Sacralium включаются один раз; выключенный потом вручную квест сидер обратно не включает
         enableGameOfferOnce(RODINA_TITLE, "Родина РП", "quest.enable.rodina.v1");
         enableGameOfferOnce(SACRALIUM_TITLE, "Sacralium", "quest.enable.sacralium.v1");
@@ -2541,6 +2580,7 @@ public class QuestSeeder implements CommandLineRunner {
         enableGameOfferOnce(ARMORED_TITLE, "Armored Warfare", "quest.enable.armored.v1");
         enableGameOfferOnce(PATHOFDOOMPC_TITLE, "Путь Судьбы на ПК", "quest.enable.pathofdoompc.v1");
         enableGameOfferOnce(ELDENQUEST_TITLE, "Вызов Древних", "quest.enable.eldenquest.v1");
+        enableGameOfferOnce(DEMONSEAL_TITLE, "Печать демонов", "quest.enable.demonseal.v1");
         enableGameOfferOnce(DEMONSLAYER_TITLE, "Охотник на Демонов", "quest.enable.demonslayer.v1");
         enableGameOfferOnce(PATHOFDOOM_TITLE, "Путь Судьбы", "quest.enable.pathofdoom.v1");
         enableGameOfferOnce(DRAGONEGG_TITLE, "Яйцо Дракона", "quest.enable.dragonegg.v1");   // с 26.11.2026 новые игровые квесты включаются сразу (решение владельца)
@@ -3777,6 +3817,10 @@ public class QuestSeeder implements CommandLineRunner {
     private static final String ELDENQUEST_TITLE = "Вызов Древних: зарегистрируйся";
     private static final long ELDENQUEST_REWARD_EXC = 1_680L;
     private static final String ELDENQUEST_CARD_KEY = "eldenquest.card.v1.done";
+
+    private static final String DEMONSEAL_TITLE = "Печать демонов: зарегистрируйся";
+    private static final long DEMONSEAL_REWARD_EXC = 1_440L;
+    private static final String DEMONSEAL_CARD_KEY = "demonseal.card.v1.done";
 
     private static final String DRAGONEGG_TITLE = "Яйцо Дракона: зарегистрируйся";
     private static final long DRAGONEGG_REWARD_EXC = 1_440L;

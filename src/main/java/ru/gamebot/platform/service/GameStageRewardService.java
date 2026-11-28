@@ -34,6 +34,7 @@ public class GameStageRewardService {
             "pathofdoom", new RussiaExtra("Путь Судьбы", 1_800L),          // 120 ₽ против 60 ₽: 36 ₽ и 18 ₽
             "pathofdoompc", new RussiaExtra("Путь Судьбы на ПК", 2_400L),  // 160 ₽ против 80 ₽: 48 ₽ и 24 ₽
             "eldenquest", new RussiaExtra("Вызов Древних", 720L),         // 80 ₽ против 56 ₽: 24 ₽ и 16,80 ₽
+            "demonseal", new RussiaExtra("Печать демонов", 720L),          // 72 ₽ против 48 ₽: 21,60 ₽ и 14,40 ₽
             "demonslayer", new RussiaExtra("Охотник на Демонов", 960L),    // 96 ₽ против 64 ₽: 28,80 ₽ и 19,20 ₽
             "jade", new RussiaExtra("Нефритовое Царство", 720L),           // 80 ₽ против 56 ₽: 24 ₽ и 16,80 ₽
             "dragonegg", new RussiaExtra("Яйцо Дракона", 720L));           // 72 ₽ против 48 ₽: 21,60 ₽ и 14,40 ₽
