@@ -15798,7 +15798,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("✏️ Изменить данные", "shop:buyother:" + reward.getId())));
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", rewardBackTarget(reward, "shop:view:" + reward.getId()))));
-        sendText(user.getTelegramId(),
+        String confirmText =
                 "📝 <b>Проверьте заявку</b>\n\n"
                         + "🎁 " + escape(reward.getTitle()) + "\n"
                         + "🪙 Цена: <b>" + fmtExc(price) + " EXC</b>\n"
@@ -15817,9 +15817,35 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                     : "После нажатия «Оформить заявку» оплата спишется и заявка уйдёт модератору.")
                                 : instant
                                 ? "После нажатия «Купить» EXC спишутся, и покупка применится сразу."
-                                : "После нажатия «Оформить заявку» EXC спишутся и заявка уйдёт модератору. Выдача вручную, мы пришлём уведомление."),
-                keyboardFactory.rowsLayout(rows));
+                                : "После нажатия «Оформить заявку» EXC спишутся и заявка уйдёт модератору. Выдача вручную, мы пришлём уведомление.");
+        // Кейс, капсула и скин CS2: тот же пост с картинкой покупаемого предмета (28.11.2026, владелец)
+        String image = cs2ItemImage(reward);
+        if (image != null && getClass().getResource("/" + image) != null) {
+            sendResourceBanner(user.getTelegramId(), image, confirmText, keyboardFactory.rowsLayout(rows));
+        } else {
+            sendText(user.getTelegramId(), confirmText, keyboardFactory.rowsLayout(rows));
+        }
     }
+
+    /** Картинка кейса, капсулы или скина CS2 из каталога по названию товара; null - это не предмет CS2. */
+    private String cs2ItemImage(RewardItem reward) {
+        String g = reward.getPurchaseGroup();
+        String title = reward.getTitle();
+        if (ru.gamebot.platform.service.Cs2SkinCatalog.GROUP.equals(g)) {
+            return cs2SkinCatalog.all().stream().filter(k -> k.title().equals(title))
+                    .map(ru.gamebot.platform.service.Cs2SkinCatalog.SkinDef::imageResource).findFirst().orElse(null);
+        }
+        if (ru.gamebot.platform.service.Cs2CaseCatalog.GROUP.equals(g)) {
+            return cs2CaseCatalog.all().stream().filter(k -> k.title().equals(title))
+                    .map(ru.gamebot.platform.service.Cs2CaseCatalog.CaseDef::imageResource).findFirst().orElse(null);
+        }
+        if (ru.gamebot.platform.service.Cs2CapsuleCatalog.GROUP.equals(g)) {
+            return cs2CapsuleCatalog.all().stream().filter(k -> k.title().equals(title))
+                    .map(ru.gamebot.platform.service.Cs2CapsuleCatalog.CapsuleDef::imageResource).findFirst().orElse(null);
+        }
+        return null;
+    }
+
 
     /** Можно ли предложить оплату спонсорскими токенами: выключатель включён, токены есть, позиция обычная или звёзды (донат-игры за «токены + звёзды» идут своим путём). */
     private boolean sponsorPayAvailable(AppUser user, RewardItem reward) {
