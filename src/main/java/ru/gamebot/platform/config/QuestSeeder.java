@@ -2458,11 +2458,50 @@ public class QuestSeeder implements CommandLineRunner {
             log.info("[QuestSeeder] Game offer quest created: Armored Warfare (landing), reward {} EXC", ARMORED_REWARD_EXC);
         }
 
+        // ── Игровой оффер: Путь Судьбы на ПК (Admitad, «Путь Судьбы [CPP]»), 28.11.2026; не путать с Android-версией выше ──
+        // Одна цель «Первый вход в игру»: Россия 160 ₽, остальные страны 80 ₽. Игроку 30%: 24 ₽ - награда квеста, за Россию ещё 24 ₽ доплатой (GameStageRewardService). Тестовый лимит рекламодателя - 100, суточный 50 (квестом не ограничивается).
+        gameCatalogService.setDifficultyMode("Путь Судьбы на ПК", "FLAT", PATHOFDOOMPC_REWARD_EXC, 0);
+        if (appSettingRepository.findById(PATHOFDOOMPC_CARD_KEY).isEmpty()) {
+            Quest pp = questRepository.findFirstByTitleAndGameName(PATHOFDOOMPC_TITLE, "Путь Судьбы на ПК").orElse(null);
+            if (pp == null) {
+                pp = new Quest();
+                pp.setGameName("Путь Судьбы на ПК");
+                pp.setTitle(PATHOFDOOMPC_TITLE);
+                pp.setParticipantLimit(100);
+                pp.setActive(false);
+                pp.setCreatedAt(LocalDateTime.now());
+            }
+            pp.setPlatform("ПК");
+            pp.setDurationDays(0);
+            pp.setDurationText("Бессрочно");
+            pp.setRewardXp(0);
+            pp.setRewardCoins(PATHOFDOOMPC_REWARD_EXC);
+            pp.setDescription("Дарк-фэнтези MMORPG для компьютера. Зайди в игру: награду начислим, когда партнёр подтвердит первый вход.");
+            pp.setInstruction("Открой страницу игры и начни играть:\n"
+                    + "https://igro-afisha.pages.dev/?tg={TG_ID}#pathofdoompc\n\n"
+                    + "Обязательно зайди в игру: без входа партнёр действие не подтвердит. Награда: 48 ₽ из России, 24 ₽ из других стран.");
+            pp.setRequirements("📎 Как получить\n"
+                    + "1. Нажми «Взять» и открой страницу игры с компьютера.\n"
+                    + "2. Зарегистрируйся новым аккаунтом по этой ссылке.\n"
+                    + "3. Зайди в игру.\n\n"
+                    + "16+. Только новые игроки. Страны: Россия, Беларусь, Казахстан и другие страны СНГ и Балтии.\n"
+                    + "💰 Рубли начислим в EXCASH, они выводятся без лимитов.");
+            pp.setExternalAutoApprove(true);
+            pp.setExternalOfferId("pathofdoompc");
+            pp.setExternalNetwork("landing");
+            pp.setExternalTargetType("REGISTRATION");
+            pp.setExternalMinPaymentRub(null);
+            questRepository.save(pp);
+            saveSetting(PATHOFDOOMPC_CARD_KEY);
+            log.info("[QuestSeeder] Game offer quest created: Путь Судьбы на ПК (landing), reward {} EXC", PATHOFDOOMPC_REWARD_EXC);
+        }
+
         // 26.11.2026 (владелец: «включи квесты вместе с деплоем»): «Родина РП» и Sacralium включаются один раз; выключенный потом вручную квест сидер обратно не включает
         enableGameOfferOnce(RODINA_TITLE, "Родина РП", "quest.enable.rodina.v1");
         enableGameOfferOnce(SACRALIUM_TITLE, "Sacralium", "quest.enable.sacralium.v1");
         enableGameOfferOnce(JADE_TITLE, "Нефритовое Царство", "quest.enable.jade.v1");
         enableGameOfferOnce(ARMORED_TITLE, "Armored Warfare", "quest.enable.armored.v1");
+        enableGameOfferOnce(PATHOFDOOMPC_TITLE, "Путь Судьбы на ПК", "quest.enable.pathofdoompc.v1");
         enableGameOfferOnce(DEMONSLAYER_TITLE, "Охотник на Демонов", "quest.enable.demonslayer.v1");
         enableGameOfferOnce(PATHOFDOOM_TITLE, "Путь Судьбы", "quest.enable.pathofdoom.v1");
         enableGameOfferOnce(DRAGONEGG_TITLE, "Яйцо Дракона", "quest.enable.dragonegg.v1");   // с 26.11.2026 новые игровые квесты включаются сразу (решение владельца)
@@ -3691,6 +3730,10 @@ public class QuestSeeder implements CommandLineRunner {
     private static final String ARMORED_TITLE = "Armored Warfare: скачай и поиграй";
     private static final long ARMORED_REWARD_EXC = 8_721L;
     private static final String ARMORED_CARD_KEY = "armored.card.v2.done";   // v2: текст владельца 26.11.2026
+
+    private static final String PATHOFDOOMPC_TITLE = "Путь Судьбы на ПК: зайди в игру";
+    private static final long PATHOFDOOMPC_REWARD_EXC = 2_400L;
+    private static final String PATHOFDOOMPC_CARD_KEY = "pathofdoompc.card.v1.done";
 
     private static final String DRAGONEGG_TITLE = "Яйцо Дракона: зарегистрируйся";
     private static final long DRAGONEGG_REWARD_EXC = 1_440L;

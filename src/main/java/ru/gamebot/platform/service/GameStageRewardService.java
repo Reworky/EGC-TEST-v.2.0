@@ -32,6 +32,7 @@ public class GameStageRewardService {
     public static final java.util.Map<String, RussiaExtra> RUSSIA_EXTRAS = java.util.Map.of(
             "sacralium", new RussiaExtra("Sacralium", 9_834L),             // этап 2: 655,70 ₽ против 327,90 ₽: 196,71 ₽ и 98,37 ₽
             "pathofdoom", new RussiaExtra("Путь Судьбы", 1_800L),          // 120 ₽ против 60 ₽: 36 ₽ и 18 ₽
+            "pathofdoompc", new RussiaExtra("Путь Судьбы на ПК", 2_400L),  // 160 ₽ против 80 ₽: 48 ₽ и 24 ₽
             "demonslayer", new RussiaExtra("Охотник на Демонов", 960L),    // 96 ₽ против 64 ₽: 28,80 ₽ и 19,20 ₽
             "jade", new RussiaExtra("Нефритовое Царство", 720L),           // 80 ₽ против 56 ₽: 24 ₽ и 16,80 ₽
             "dragonegg", new RussiaExtra("Яйцо Дракона", 720L));           // 72 ₽ против 48 ₽: 21,60 ₽ и 14,40 ₽
