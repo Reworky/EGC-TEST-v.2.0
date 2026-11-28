@@ -6963,10 +6963,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return keyboardFactory.callback(vpnService.isEnabled() ? "🔐 VPN" : "🔐 VPN (скоро)", "menu:vpn");
     }
 
-    /** Кнопка VPN в главном меню: цену показываем, только когда новый VPN-бот игроку доступен. */
+    /** Кнопка VPN в главном меню: про оплату токенами пишем, только когда новый VPN-бот игроку доступен. */
     private InlineKeyboardButton vpnMenuButton(AppUser user) {
         String link = vpnBotLinkFor(user);
-        if (link != null) return keyboardFactory.url("🔐 EGC VPN · от 50 ₽ в неделю", link);
+        if (link != null) return keyboardFactory.url("🔐 EGC VPN · за токены EXC", link);
         return keyboardFactory.callback(vpnService.isEnabled() ? "🔐 EGC VPN" : "🔐 EGC VPN (скоро)", "menu:vpn");
     }
 
