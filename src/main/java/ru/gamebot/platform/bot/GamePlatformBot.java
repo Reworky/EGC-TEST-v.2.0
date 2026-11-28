@@ -203,6 +203,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.ErrorMonitorService errorMonitorService;
     private final ru.gamebot.platform.service.DeployService deployService;
     private final ru.gamebot.platform.service.NotificationGateService notificationGate;
+    private final ru.gamebot.platform.service.PromoGateService promoGate;
     private final ru.gamebot.platform.service.WithdrawalNudgeService withdrawalNudgeService;
     private final ru.gamebot.platform.service.ClubActivityService clubActivityService;
     private final ru.gamebot.platform.service.ModeratorBonusService moderatorBonusService;
@@ -1560,6 +1561,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (data.startsWith("onboarding:")) {
             handleOnboardingCallback(callbackQuery, user, data.substring("onboarding:".length()));
+            return;
+        }
+        if ("promo:off".equals(data)) {
+            promoGate.optOut(user.getId());
+            answerSilently(callbackQuery.getId());
+            sendText(user.getTelegramId(), "🔕 Хорошо, о предложениях больше не напомним. Сообщения о наградах и статусах будут приходить как раньше.",
+                    backMenuKeyboard("menu:main"));
             return;
         }
         if (data.startsWith("offer:")) {
@@ -28168,13 +28176,86 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private boolean sendOffer(AppUser user, String text, InlineKeyboardButton button, String shownStep) {
         try {
-            notifyUser(user.getTelegramId(), text, button);
+            notifyUser(user.getTelegramId(), text, button, promoOffButton());
             fn(user, shownStep);
             return true;
         } catch (Exception e) {
             log.warn("Reward offer failed for {}: {}", user.getTelegramId(), e.getMessage());
             return false;
         }
+    }
+
+    // ─── Напоминания о спонсорских квестах и VPN (28.11.2026, тексты владельца): кому и когда, решает PromoReminderService ───
+
+    private InlineKeyboardButton promoOffButton() {
+        return keyboardFactory.callback("🔕 Не напоминать о предложениях", "promo:off");
+    }
+
+    private void sendPromo(Long telegramId, String text, List<InlineKeyboardButton> buttons) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (InlineKeyboardButton b : buttons) rows.add(List.of(b));
+        rows.add(List.of(promoOffButton()));
+        rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(telegramId, text, keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Награда квеста одной фразой, как на карточке: у банка рубли и скин, у партнёра сумма в рублях («до», если сумм несколько). */
+    private String promoRewardText(AppUser user, Quest quest) {
+        ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(quest);
+        if (pm != null) {
+            long sum = ru.gamebot.platform.service.PartnerMissions.rubReward(pm);
+            String skin = ru.gamebot.platform.service.QuestSkinService.isSkinQuest(pm)
+                    ? "скин " + ru.gamebot.platform.service.QuestSkinService.SKINS.get(pm.key()).label() + " в Steam" : "";
+            if (sum > 0) return fmtExc(sum) + " ₽" + (skin.isEmpty() ? "" : " и " + skin);
+            return skin.isEmpty() ? "указана на карточке квеста" : skin;
+        }
+        if (sponsorBalanceService.applies(quest)) {
+            long max = gameStageRewardService.remainingMaxExc(quest, user.getId());
+            boolean several = max != quest.getRewardCoins() || "rodina".equals(quest.getExternalOfferId());
+            return (several ? "до " : "") + ru.gamebot.platform.service.GameStageRewardService.rubWithKopecks(max) + " ₽";
+        }
+        return fmtExc(quest.getRewardCoins()) + " EXC";
+    }
+
+    public void sendBankQuestReminder(QuestSubmission sub, ru.gamebot.platform.service.PartnerMission pm, int step) {
+        AppUser user = sub.getUser();
+        String reward = escape(promoRewardText(user, sub.getQuest()));
+        String text = step == 1
+                ? "💳 <b>Квест на карту ждёт тебя</b>\n\nТы взял квест «" + escape(pm.shortTitle()) + "». Награда: " + reward + ".\n\n"
+                        + "Если уже оформил заявку, ничего делать не нужно. Если ещё нет, открой квест и проверь условия."
+                : "💳 <b>Нужна помощь с квестом?</b>\n\n«" + escape(pm.shortTitle()) + "», награда: " + reward + ".\n\n"
+                        + "Если что-то не получается, напиши менеджеру.";
+        sendPromo(user.getTelegramId(), text, List.of(
+                keyboardFactory.callback("▶️ Открыть квест", "myquest:view:" + sub.getId()),
+                partnerManagerButton(pm, sub, "💬 Вопрос менеджеру", "Вопрос по квесту «Миссия: " + pm.missionTitle() + "»", "помогите с оформлением карты")));
+    }
+
+    public void sendGameQuestReminder(QuestSubmission sub, int step) {
+        AppUser user = sub.getUser();
+        String game = escape(sub.getQuest().getGameName());
+        String reward = escape(promoRewardText(user, sub.getQuest()));
+        String text = step == 1
+                ? "🎮 <b>" + game + ": квест взят</b>\n\nЗа него можно получить " + reward + ".\n\n"
+                        + "Если уже играешь, продолжай: засчитанная награда начислится в боте, если ещё не начал, открой квест и посмотри шаги."
+                : "🎮 <b>" + game + ": проверь шаги</b>\n\nНаграда: " + reward + ". Засчитывается только то, что выполнено по условиям квеста. "
+                        + "Загляни в них, если играешь или собираешься начать.";
+        sendPromo(user.getTelegramId(), text, List.of(keyboardFactory.callback("▶️ Открыть квест", "myquest:view:" + sub.getId())));
+    }
+
+    public void sendViewedQuestReminder(AppUser user, Quest quest) {
+        ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(quest);
+        String text = "💎 <b>Ещё думаешь?</b>\n\nТы смотрел квест «" + escape(pm != null ? pm.shortTitle() : quest.getTitle()) + "».\n\n"
+                + "Награда: " + escape(promoRewardText(user, quest)) + ". Условия указаны на карточке.";
+        sendPromo(user.getTelegramId(), text, List.of(keyboardFactory.callback("Посмотреть квест", "quest:view:sponsored:all:" + quest.getId())));
+    }
+
+    public void sendVpnReminder(AppUser user, int step) {
+        String days = ru.gamebot.platform.service.Vpn2Service.daysText(vpn2Service.getTrialDays());
+        String text = step == 1
+                ? "🔐 <b>VPN клуба можно попробовать бесплатно</b>\n\n" + days + " бесплатно, дальше от 50 ₽ в неделю. На тарифы от месяца есть скидка за EXC."
+                : "🔐 <b>Пробный VPN всё ещё доступен</b>\n\n" + days + " бесплатно. Если VPN пригодится, открой бота по кнопке ниже.\n\nБольше об этом не напомним.";
+        sendPromo(user.getTelegramId(), text, List.of(
+                keyboardFactory.url("🔐 Открыть EGC VPN", "https://t.me/" + vpn2Service.getBotUsername() + "?start=from_egc")));
     }
 
     @org.springframework.context.event.EventListener

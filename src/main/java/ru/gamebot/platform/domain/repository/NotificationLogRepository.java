@@ -14,6 +14,10 @@ public interface NotificationLogRepository extends JpaRepository<NotificationLog
 
     Optional<NotificationLog> findFirstByUserIdOrderBySentAtDesc(Long userId);
 
+    long countByUserIdAndTypeInAndSentAtAfter(Long userId, java.util.Collection<String> types, LocalDateTime since);
+
+    List<NotificationLog> findTop3ByUserIdAndTypeInOrderBySentAtDesc(Long userId, java.util.Collection<String> types);
+
     /** По типам за период: [type, всего отправлено, из них старше matureBefore, из них вернулись]. «Вернулись» считаем только
      * среди «созревших» сообщений (старше 48 ч), иначе свежие занижали бы процент. */
     @Query("select n.type, count(n), "

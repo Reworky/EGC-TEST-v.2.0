@@ -7,4 +7,7 @@ public interface LeadgidConversionRepository extends JpaRepository<LeadgidConver
 
     /** Тот же статус той же конверсии уже приходил (LeadGid может повторять постбек). */
     boolean existsByExternalIdAndStatusNorm(String externalId, String statusNorm);
+
+    /** Банк уже сообщил о заявке по этому взятию квеста. */
+    boolean existsBySubmissionId(Long submissionId);
 }

@@ -14,6 +14,10 @@ import ru.gamebot.platform.domain.model.QuestSubmission;
 
 public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission, Long> {
 
+    /** Взятые за окно и ещё не закрытые заявки (напоминания о спонсорских квестах). */
+    @EntityGraph(attributePaths = {"user", "quest"})
+    List<QuestSubmission> findAllByStatusAndCreatedAtBetween(SubmissionStatus status, LocalDateTime from, LocalDateTime to);
+
     @EntityGraph(attributePaths = {"user", "quest"})
     List<QuestSubmission> findAllByStatusOrderByCreatedAtAsc(SubmissionStatus status);
 

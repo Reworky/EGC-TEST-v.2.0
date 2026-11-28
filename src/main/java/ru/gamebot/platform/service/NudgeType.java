@@ -13,6 +13,12 @@ public enum NudgeType {
     SECOND_QUEST(70, false, "🎁 Второй квест"),
     SPONSOR_QUEST(65, false, "💼 Спонсорский квест"),
     OTP_MISSION(66, false, "💳 Миссия «ОТП Карта»"),
+    // 28.11.2026: напоминания о предложениях (спонсорские квесты и VPN), общий антиспам - PromoGateService
+    PROMO_BANK(64, false, "💳 Взял квест банка"),
+    PROMO_GAME(63, false, "🎮 Взял игровой квест партнёра"),
+    PROMO_OFFER(62, false, "🎯 Предложение после награды"),
+    PROMO_VIEWED(42, false, "💎 Смотрел квест, не взял"),
+    PROMO_VPN(35, false, "🔐 Напоминание про VPN"),
     ABOUT_PROMPT(44, false, "🎁 Анкета: возраст и страна"),
     WITHDRAWAL_OPEN(55, false, "💸 Вывод открыт"),
     WEEKEND_BOOST(58, false, "🔥 Буст выходных"),

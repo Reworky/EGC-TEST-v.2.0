@@ -23,7 +23,7 @@ import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
 import ru.gamebot.platform.event.QuestRewardedEvent;
 
 /**
- * Предложения после наград (27.11.2026, порядок утверждён владельцем): по одному на новую награду и не чаще раза в сутки, каждое - один раз на игрока.
+ * Предложения после наград (27.11.2026, порядок утверждён владельцем): по одному на новую награду, частоту держит PromoGateService, каждое - один раз на игрока.
  * 1) спонсорские квесты - после первой игровой награды; 2) VPN; 3) UGC. Тем, кто уже брал спонсорский квест, пользуется VPN или снимал ролик, соответствующее не шлём.
  * Срабатывает только на новых одобрениях (планировщика нет, поэтому по накопленной базе залпа не будет). Отметки лежат в app_settings: offer.<вид>.<id игрока>.
  */
@@ -32,16 +32,17 @@ import ru.gamebot.platform.event.QuestRewardedEvent;
 public class RewardOfferService {
 
     private static final int DELAY_SECONDS = 90;
-    private static final int GAP_HOURS = 24;
 
     private final AppSettingRepository appSettingRepository;
     private final AppUserRepository appUserRepository;
     private final QuestSubmissionRepository questSubmissionRepository;
     private final GamePlatformBot bot;
+    private final PromoGateService promoGate;
     private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 
     public RewardOfferService(AppSettingRepository appSettingRepository, AppUserRepository appUserRepository,
-                              QuestSubmissionRepository questSubmissionRepository, @Lazy GamePlatformBot bot) {
+                              QuestSubmissionRepository questSubmissionRepository, @Lazy GamePlatformBot bot, PromoGateService promoGate) {
+        this.promoGate = promoGate;
         this.appSettingRepository = appSettingRepository;
         this.appUserRepository = appUserRepository;
         this.questSubmissionRepository = questSubmissionRepository;
@@ -72,22 +73,22 @@ public class RewardOfferService {
         List<QuestSubmission> subs = questSubmissionRepository.findAllByUserOrderByCreatedAtDesc(user);
         QuestSubmission trigger = subs.stream().filter(s -> s.getId().equals(submissionId)).findFirst().orElse(null);
         if (trigger == null || trigger.getStatus() != SubmissionStatus.APPROVED) return;
-        String last = get("offer.last." + userId);
-        if (last != null && LocalDateTime.parse(last).isAfter(LocalDateTime.now().minusHours(GAP_HOURS))) return;
+        // общий антиспам с напоминаниями о предложениях (не чаще раза в 3 суток) и отказ игрока
+        if (!promoGate.canSend(user)) return;
 
         boolean firstGameReward = isGame(trigger.getQuest())
                 && subs.stream().filter(s -> s.getStatus() == SubmissionStatus.APPROVED && isGame(s.getQuest())).count() == 1;
         if (get("offer.sp." + userId) == null && firstGameReward
                 && subs.stream().noneMatch(s -> isSponsor(s.getQuest())) && bot.sendSponsorOffer(user)) {
-            mark("sp", userId);
+            mark("sp", user);
             return;
         }
         if (get("offer.vpn." + userId) == null && bot.sendVpnOffer(user)) {
-            mark("vpn", userId);
+            mark("vpn", user);
             return;
         }
         if (get("offer.ugc." + userId) == null && subs.stream().noneMatch(s -> QuestService.isUgcQuest(s.getQuest())) && bot.sendUgcOffer(user)) {
-            mark("ugc", userId);
+            mark("ugc", user);
         }
     }
 
@@ -103,10 +104,9 @@ public class RewardOfferService {
         return appSettingRepository.findById(key).map(AppSetting::getValue).orElse(null);
     }
 
-    private void mark(String kind, Long userId) {
-        String now = LocalDateTime.now().toString();
-        put("offer." + kind + "." + userId, now);
-        put("offer.last." + userId, now);
+    private void mark(String kind, AppUser user) {
+        put("offer." + kind + "." + user.getId(), LocalDateTime.now().toString());
+        promoGate.record(user, NudgeType.PROMO_OFFER);
     }
 
     private void put(String key, String value) {

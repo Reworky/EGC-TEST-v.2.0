@@ -14,6 +14,8 @@ public interface PartnerQuestEventRepository extends JpaRepository<PartnerQuestE
     @Query("SELECT COUNT(e) FROM PartnerQuestEvent e WHERE e.type = :type AND e.createdAt >= :from AND e.createdAt < :to")
     long countByTypeBetween(@Param("type") String type, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
+    java.util.List<ru.gamebot.platform.domain.model.PartnerQuestEvent> findAllByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(String type, LocalDateTime from, LocalDateTime to);
+
     /** Открытия карточек спонсорских квестов за период: [questId, уникальных игроков]. */
     @Query("SELECT e.questId, COUNT(DISTINCT e.telegramId) FROM PartnerQuestEvent e WHERE e.type = 'SPONSOR_VIEWED' AND e.questId IS NOT NULL AND e.createdAt >= :from AND e.createdAt < :to GROUP BY e.questId")
     java.util.List<Object[]> countViewersByQuest(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
