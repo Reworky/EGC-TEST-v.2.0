@@ -1067,7 +1067,13 @@ public class VpnBot extends TelegramLongPollingBot {
         if (pending.isEmpty()) {
             return;
         }
-        Map<String, VpnPanelClient.ClientStat> stats = vpn.allClientStats();
+        Map<String, VpnPanelClient.ClientStat> stats;
+        try {
+            stats = vpn.allClientStats();
+        } catch (VpnPanelClient.PanelException e) {
+            log.warn("VPN bot second connection nudge: panel unavailable", e);
+            return; // отметки ещё не ставили: повторим в следующий проход
+        }
         for (Vpn2Account a : pending) {
             VpnPanelClient.ClientStat st = stats.get(a.getPanelEmail());
             if (st == null) {
