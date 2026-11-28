@@ -15927,14 +15927,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             // Игрок уже указывал данные для выдачи в этой игре: предлагаем те же одним нажатием (06.11.2026)
             String lastDetails = rewardService.lastPayoutDetails(user, reward.getPurchaseGroup());
             if (lastDetails != null) {
-                sendText(user.getTelegramId(),
-                        "📋 <b>Выдать на те же данные?</b>\n\n"
-                                + "🎁 " + escape(reward.getTitle()) + "\n"
-                                + "В прошлый раз вы указывали: <code>" + escape(lastDetails) + "</code>",
-                        keyboardFactory.rowsLayout(List.of(
-                                List.of(keyboardFactory.callback("✅ Да, выдать на эти данные", "shop:buyto:" + rewardId)),
-                                List.of(keyboardFactory.callback("✏️ Указать другие", "shop:buyother:" + rewardId)),
-                                List.of(keyboardFactory.callback("⬅️ Назад", rewardBackTarget(reward, "shop:view:" + rewardId))))));
+                String sameText = "📋 <b>Выдать на те же данные?</b>\n\n"
+                        + "🎁 " + escape(reward.getTitle()) + "\n\n"
+                        + "В прошлый раз вы указывали:\n\n<code>" + escape(lastDetails) + "</code>";
+                InlineKeyboardMarkup sameKeyboard = keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("✅ Да, выдать на эти данные", "shop:buyto:" + rewardId)),
+                        List.of(keyboardFactory.callback("✏️ Указать другие", "shop:buyother:" + rewardId)),
+                        List.of(keyboardFactory.callback("⬅️ Назад", rewardBackTarget(reward, "shop:view:" + rewardId)))));
+                // Кейс, капсула и скин CS2: тот же пост с картинкой предмета (28.11.2026, владелец)
+                String sameImage = cs2ItemImage(reward);
+                if (sameImage != null && getClass().getResource("/" + sameImage) != null) {
+                    sendResourceBanner(user.getTelegramId(), sameImage, sameText, sameKeyboard);
+                } else {
+                    sendText(user.getTelegramId(), sameText, sameKeyboard);
+                }
                 answerSilently(callbackQuery.getId());
                 return;
             }
