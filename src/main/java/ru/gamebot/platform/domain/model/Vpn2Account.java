@@ -73,6 +73,12 @@ public class Vpn2Account {
     /** Когда проверили, подключился ли игрок после выдачи ключа (через час после выдачи, один раз): null - ещё не проверяли. */
     private LocalDateTime helpNudgedAt;
 
+    /** Когда через сутки после выдачи ключа повторно проверили подключение (второе сообщение, один раз). */
+    private LocalDateTime connectNudge2At;
+
+    /** Для какого срока уже отправлено «Сегодня последний день»: после продления expiresAt другой, и напоминание придёт снова. */
+    private LocalDateTime lastDayNotifiedFor;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 

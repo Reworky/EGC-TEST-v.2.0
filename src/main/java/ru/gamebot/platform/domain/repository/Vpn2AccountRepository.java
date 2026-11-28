@@ -28,6 +28,12 @@ public interface Vpn2AccountRepository extends JpaRepository<Vpn2Account, Long> 
     /** Ключи, выданные в окне, по которым ещё не проверяли, подключился ли игрок. */
     List<Vpn2Account> findByStatusAndHelpNudgedAtIsNullAndCreatedAtBetween(String status, LocalDateTime from, LocalDateTime to);
 
+    /** Вторая проверка подключения (через сутки): первая уже была, второй ещё не было. */
+    List<Vpn2Account> findByStatusAndHelpNudgedAtIsNotNullAndConnectNudge2AtIsNullAndCreatedAtBetween(String status, LocalDateTime from, LocalDateTime to);
+
+    /** Платные или пробные с концом срока в окне. */
+    List<Vpn2Account> findByPlanTypeAndStatusAndExpiresAtBetween(String planType, String status, LocalDateTime from, LocalDateTime to);
+
     long countByStatusAndPlanTypeAndExpiresAtAfter(String status, String planType, LocalDateTime after);
 
     long countByStatusAndExpiresAtBetween(String status, LocalDateTime from, LocalDateTime to);

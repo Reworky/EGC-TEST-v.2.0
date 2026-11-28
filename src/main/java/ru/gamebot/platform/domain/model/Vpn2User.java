@@ -46,4 +46,21 @@ public class Vpn2User {
 
     @Column(nullable = false)
     private LocalDateTime createdAt;
+
+    /** Сколько напоминаний «пробный ещё не взят» уже отправлено: 0, 1 (через 3 часа) или 2 (через 2 дня, последнее). */
+    @Column(nullable = false, columnDefinition = "int default 0")
+    private int trialOfferStage = 0;
+
+    /** Человек нажал «Не напоминать»: продающие дожимные сообщения ему больше не шлём. */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean remindOff = false;
+
+    /** Когда ушло последнее дожимное сообщение: не больше одного в сутки. */
+    private LocalDateTime followUpAt;
+
+    /** Когда человек в последний раз открывал экран тарифов. */
+    private LocalDateTime tariffsViewedAt;
+
+    /** Когда отправили «Платить деньгами не обязательно» после просмотра тарифов (один раз). */
+    private LocalDateTime tariffNudgedAt;
 }

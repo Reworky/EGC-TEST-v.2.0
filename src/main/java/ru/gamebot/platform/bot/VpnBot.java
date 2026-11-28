@@ -88,6 +88,8 @@ public class VpnBot extends TelegramLongPollingBot {
     private final GamePlatformBot egcBot;
     private final TrafficSourceService trafficSourceService;
     private final Vpn2AccountRepository accountRepository;
+    private final ru.gamebot.platform.domain.repository.Vpn2UserRepository userRepository;
+    private final ru.gamebot.platform.domain.repository.Vpn2PaymentRepository paymentRepository;
     private final Vpn2FeedbackRepository feedbackRepository;
     private final Vpn2ManualPaymentRepository manualPaymentRepository;
     private final Vpn2CryptoInvoiceRepository cryptoInvoiceRepository;
@@ -313,6 +315,7 @@ public class VpnBot extends TelegramLongPollingBot {
             case "h:diag" -> showDiagnosis(uid, oldMsgId);
             case "h:qr" -> sendQr(uid);
             case "h:ok" -> showHelpOk(uid, oldMsgId);
+            case "fu:off" -> disableFollowUps(uid, oldMsgId);
             default -> { }
         }
     }
@@ -425,6 +428,11 @@ public class VpnBot extends TelegramLongPollingBot {
     }
 
     private void showTariffs(Long uid, Integer oldMsgId) {
+        try {
+            userRepository.markTariffsViewed(uid, LocalDateTime.now());
+        } catch (Exception e) {
+            log.warn("VPN bot: failed to mark tariffs view for {}", uid, e);
+        }
         StringBuilder sb = new StringBuilder("💳 <b>Тарифы EGC VPN</b>\n\n");
         for (Tariff t : Tariff.values()) {
             sb.append("• ").append(t.getTitle()).append(": <b>").append(t.getPriceRub()).append(" ₽</b> (").append(t.getStars()).append(" ⭐)");
@@ -921,7 +929,7 @@ public class VpnBot extends TelegramLongPollingBot {
             for (Vpn2Account a : accountRepository.findByStatusAndReminderStageLessThanAndExpiresAtBetween(
                     Vpn2Account.STATUS_ACTIVE, 2, now.minusDays(REMIND_EXPIRED_WINDOW_DAYS), now)) {
                 remindOne(a, 2, Vpn2Account.PLAN_TRIAL.equals(a.getPlanType())
-                        ? "🔐 <b>Пробный период EGC VPN закончился</b>\nХотите продолжить? Неделя стоит 50 ₽, месяц 150 ₽, а за EXC дешевле."
+                        ? "🔐 <b>Пробный период EGC VPN закончился</b>\nХотите продолжить? Неделя стоит " + Tariff.W1.getStars() + " ⭐, месяц " + Tariff.M1.getStars() + " ⭐."
                         : "🔐 <b>Срок EGC VPN истёк</b>\nПродлите, и ключ снова заработает.",
                         "💳 Оформить");
             }
@@ -949,6 +957,200 @@ public class VpnBot extends TelegramLongPollingBot {
         } catch (Exception e) {
             log.warn("VPN bot reminder failed for {}", a.getTelegramId(), e);
         }
+    }
+
+    // ---------------------------------------------------------------- дожимные сообщения
+
+    private static final java.time.ZoneId MOSCOW = java.time.ZoneId.of("Europe/Moscow");
+
+    /** Раз в 20 минут, только с 10:00 до 21:00 по Москве. Тексты обещают оплату EXC, поэтому при выключенной оплате EXC цепочка молчит.
+     *  Бэклог: у каждого шага узкое окно по времени и своя отметка (ставится до отправки), поэтому старая база залпом ничего не получит. */
+    @Scheduled(initialDelay = 8 * 60_000L, fixedDelay = 20 * 60_000L)
+    public void sendFollowUps() {
+        if (!registered || !vpn.isEnabled() || !vpn.isExcPayEnabled() || !daytimeInMoscow()) {
+            return;
+        }
+        runFollowUpStep("last day", this::followUpLastDay);
+        runFollowUpStep("second connect", this::followUpNotConnected);
+        if (!vpnHealthy()) {
+            return; // пока проверка VPN красная, продающие сообщения не шлём
+        }
+        runFollowUpStep("trial expired", this::followUpTrialExpired);
+        runFollowUpStep("tariffs viewed", this::followUpTariffsViewed);
+        if (vpn.isOpen()) {
+            runFollowUpStep("no trial", this::followUpNoTrial);
+        }
+    }
+
+    private void runFollowUpStep(String name, Runnable step) {
+        try {
+            step.run();
+        } catch (Exception e) {
+            log.warn("VPN bot follow-up step '{}' failed", name, e);
+        }
+    }
+
+    private static boolean daytimeInMoscow() {
+        int hour = java.time.ZonedDateTime.now(MOSCOW).getHour();
+        return hour >= 10 && hour < 21;
+    }
+
+    private boolean vpnHealthy() {
+        Vpn2HealthService.Status s = health.status();
+        if (s.panelFailures() >= 2) {
+            return false;
+        }
+        return !s.heartbeatExpected() || (s.ok() && System.currentTimeMillis() - s.lastBeatMs() <= 15 * 60_000L);
+    }
+
+    /** Не писали ли человеку дожимное за последние сутки. */
+    private boolean freeForFollowUp(Long uid) {
+        return userRepository.findByTelegramId(uid)
+                .map(u -> u.getFollowUpAt() == null || u.getFollowUpAt().isBefore(LocalDateTime.now().minusHours(24)))
+                .orElse(true);
+    }
+
+    private boolean remindersOff(Long uid) {
+        return userRepository.findByTelegramId(uid).map(ru.gamebot.platform.domain.model.Vpn2User::isRemindOff).orElse(false);
+    }
+
+    private void sendFollowUp(Long uid, String html, List<List<InlineKeyboardButton>> rows) {
+        try {
+            userRepository.markFollowUp(uid, LocalDateTime.now());
+            sendHtml(uid, html, rows);
+            Thread.sleep(60);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (Exception e) {
+            log.warn("VPN bot follow-up failed for {}", uid, e);
+        }
+    }
+
+    private List<InlineKeyboardButton> remindOffRow() {
+        return List.of(keyboardFactory.callback("🔕 Не напоминать", "fu:off"));
+    }
+
+    /** 1. Открыл бота и не взял пробный: через 3 часа и ещё раз через 2 дня. */
+    private void followUpNoTrial() {
+        LocalDateTime now = LocalDateTime.now();
+        // сначала второй шаг: иначе только что получивший первое сообщение мог бы сразу попасть под него
+        for (ru.gamebot.platform.domain.model.Vpn2User u : userRepository.findByTrialOfferStageAndRemindOffFalseAndCreatedAtBetween(1, now.minusDays(5), now.minusDays(2))) {
+            offerTrial(u.getTelegramId(), 2, "🎁 <b>Ваши " + daysText(vpn.getTrialDays()) + " всё ещё здесь</b>\n"
+                    + "Включайте бесплатно. Пока идёт пробный, копите EXC в играх: ими можно оплатить VPN и дальше.\n\nБольше про пробный напоминать не будем.");
+        }
+        for (ru.gamebot.platform.domain.model.Vpn2User u : userRepository.findByTrialOfferStageAndRemindOffFalseAndCreatedAtBetween(0, now.minusHours(24), now.minusHours(3))) {
+            offerTrial(u.getTelegramId(), 1, "🎮 <b>А вы знали, что VPN можно получить за игры?</b>\n\n"
+                    + "Выполняйте игровые квесты в EGC, копите EXC и берите VPN без денег.\n\n"
+                    + "А начать можно прямо сейчас: " + daysText(vpn.getTrialDays()) + " бесплатно, без карты.");
+        }
+    }
+
+    private void offerTrial(Long uid, int stage, String html) {
+        if (accountRepository.findByTelegramId(uid).isPresent() || !freeForFollowUp(uid)) {
+            return;
+        }
+        userRepository.markTrialOffer(uid, stage);
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("🎁 Забрать " + daysText(vpn.getTrialDays()), "m:trial")));
+        rows.add(List.of(keyboardFactory.url("🎮 Играть и копить EXC", egcUrl())));
+        rows.add(remindOffRow());
+        sendFollowUp(uid, html, rows);
+    }
+
+    /** 2. Ключ выдан сутки назад, а VPN так и не включали. */
+    private void followUpNotConnected() {
+        LocalDateTime now = LocalDateTime.now();
+        List<Vpn2Account> pending = accountRepository.findByStatusAndHelpNudgedAtIsNotNullAndConnectNudge2AtIsNullAndCreatedAtBetween(
+                        Vpn2Account.STATUS_ACTIVE, now.minusHours(48), now.minusHours(24)).stream()
+                .filter(a -> vpn.isRunning(a) && freeForFollowUp(a.getTelegramId()))
+                .toList();
+        if (pending.isEmpty()) {
+            return;
+        }
+        Map<String, VpnPanelClient.ClientStat> stats = vpn.allClientStats();
+        for (Vpn2Account a : pending) {
+            VpnPanelClient.ClientStat st = stats.get(a.getPanelEmail());
+            if (st == null) {
+                continue; // панель не показала клиента: не знаем, подключался ли, проверим в следующий проход
+            }
+            a.setConnectNudge2At(now);
+            accountRepository.save(a);
+            if (st.used() > 0 || st.lastOnlineMs() > 0) {
+                continue;
+            }
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            rows.add(List.of(keyboardFactory.callback("🛠 Помогите мне", "h:diag")));
+            rows.add(List.of(keyboardFactory.callback("✅ Всё уже работает", "h:ok")));
+            sendFollowUp(a.getTelegramId(), "🛠 <b>Почти получилось!</b>\nКлюч у вас, а VPN ещё не включался.\n\n"
+                    + "Давайте добьём за 3 шага? А потом играйте, копите EXC и продлевайте VPN без денег.", rows);
+        }
+    }
+
+    /** 3. Пробный закончился 3 дня назад, оплаты не было. reminderStage = 3 - отправлено; новый срок сбрасывает отметку. */
+    private void followUpTrialExpired() {
+        LocalDateTime now = LocalDateTime.now();
+        for (Vpn2Account a : accountRepository.findByPlanTypeAndStatusAndExpiresAtBetween(
+                Vpn2Account.PLAN_TRIAL, Vpn2Account.STATUS_ACTIVE, now.minusDays(5), now.minusDays(3))) {
+            Long uid = a.getTelegramId();
+            if (a.getReminderStage() >= 3 || remindersOff(uid) || !paymentRepository.findTop5ByTelegramIdOrderByCreatedAtDesc(uid).isEmpty() || !freeForFollowUp(uid)) {
+                continue;
+            }
+            a.setReminderStage(3);
+            accountRepository.save(a);
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            rows.add(List.of(keyboardFactory.callback("🪙 Оплатить EXC", "m:exc"), keyboardFactory.url("🎮 Копить EXC", egcUrl())));
+            rows.add(List.of(keyboardFactory.callback("⭐ Тарифы", "m:tariffs")));
+            rows.add(remindOffRow());
+            sendFollowUp(uid, "👋 <b>Вернуть VPN можно без денег</b>\nНеделя стоит " + formatExc(Tariff.W1.getExcOnlyPrice())
+                    + " EXC, а зарабатываются они в игровых квестах EGC.\n\nНе хотите ждать? Неделя за " + Tariff.W1.getStars() + " ⭐.", rows);
+        }
+    }
+
+    /** 4. Сутки назад открывал тарифы и не купил (один раз за всё время). */
+    private void followUpTariffsViewed() {
+        LocalDateTime now = LocalDateTime.now();
+        for (ru.gamebot.platform.domain.model.Vpn2User u : userRepository.findByTariffNudgedAtIsNullAndRemindOffFalseAndTariffsViewedAtBetween(now.minusHours(48), now.minusHours(24))) {
+            Long uid = u.getTelegramId();
+            boolean paid = !paymentRepository.findTop5ByTelegramIdOrderByCreatedAtDesc(uid).isEmpty();
+            boolean paidKey = accountRepository.findByTelegramId(uid)
+                    .map(a -> !Vpn2Account.PLAN_TRIAL.equals(a.getPlanType()) && vpn.isRunning(a)).orElse(false);
+            if (paid || paidKey || !freeForFollowUp(uid)) {
+                continue;
+            }
+            userRepository.markTariffNudged(uid, now);
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            rows.add(List.of(keyboardFactory.url("🎮 Копить EXC", egcUrl()), keyboardFactory.callback("💳 Тарифы", "m:tariffs")));
+            rows.add(List.of(keyboardFactory.url("💬 Написать нам", supportLink(uid, "VPN-бот → тарифы", "вопрос по оплате VPN"))));
+            rows.add(remindOffRow());
+            sendFollowUp(uid, "🤔 <b>Платить деньгами не обязательно</b>\nИграйте в EGC и копите EXC: за " + formatExc(Tariff.W1.getExcOnlyPrice())
+                    + " берите неделю VPN без денег.\n\nБерёте от месяца за звёзды? Те же " + formatExc(Vpn2Service.EXC_DISCOUNT) + " EXC дадут скидку около 50 ₽.", rows);
+        }
+    }
+
+    /** 5. Платный ключ заканчивается сегодня (или ночью до 10:00 по Москве). Это сервисное напоминание: «Не напоминать» и суточный лимит его не гасят. */
+    private void followUpLastDay() {
+        LocalDateTime now = LocalDateTime.now();
+        java.time.ZonedDateTime msk = java.time.ZonedDateTime.now(MOSCOW);
+        long minutesLeft = java.time.Duration.between(msk, msk.toLocalDate().plusDays(1).atTime(10, 0).atZone(MOSCOW)).toMinutes();
+        for (Vpn2Account a : accountRepository.findByPlanTypeAndStatusAndExpiresAtBetween(
+                Vpn2Account.PLAN_PAID, Vpn2Account.STATUS_ACTIVE, now, now.plusMinutes(minutesLeft))) {
+            if (a.getExpiresAt().equals(a.getLastDayNotifiedFor())) {
+                continue;
+            }
+            a.setLastDayNotifiedFor(a.getExpiresAt());
+            accountRepository.save(a);
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            rows.add(List.of(keyboardFactory.callback("💳 Продлить", "m:tariffs"), keyboardFactory.callback("🪙 Оплатить EXC", "m:exc")));
+            sendFollowUp(a.getTelegramId(), "⏳ <b>Сегодня последний день VPN</b>\nПродлите, чтобы не было пауз.\n\n"
+                    + "Накопили EXC в играх? Оплатите ими или получите скидку.", rows);
+        }
+    }
+
+    private void disableFollowUps(Long uid, Integer oldMsgId) {
+        userRepository.disableReminders(uid);
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
+        show(uid, oldMsgId, "🔕 Хорошо, предложениями больше не беспокоим. О конце срока вашего ключа напомним, как и раньше.", rows);
     }
 
     // ---------------------------------------------------------------- другие способы оплаты
@@ -2103,12 +2305,24 @@ public class VpnBot extends TelegramLongPollingBot {
                     f.setCreatedAt(LocalDateTime.now());
                     feedbackRepository.save(f);
                     List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-                    if ("price".equals(p[2])) {
-                        rows.add(List.of(keyboardFactory.callback("💳 Тарифы", "m:tariffs"), keyboardFactory.url("🎮 Копить EXC", egcUrl())));
+                    String reply = "🙏 <b>Спасибо!</b> Это помогает нам стать лучше.";
+                    if ("slow".equals(p[2]) || "broken".equals(p[2])) {
+                        alertAdmins("😔 <b>EGC VPN не продлили</b>, причина: " + escape(CHURN_REASONS.get(p[2]))
+                                + ". Игрок <a href=\"tg://user?id=" + uid + "\">написать</a> (<code>" + uid + "</code>)");
+                        rows.add(List.of(keyboardFactory.url("💬 Написать нам", supportLink(uid, "VPN-бот → почему не продлили", "VPN работал плохо, нужна проверка ключа"))));
+                        reply = "😔 <b>Так быть не должно</b>\nРасскажите, что случилось: напишите в поддержку, и мы проверим ваш ключ.";
+                    } else if ("price".equals(p[2])) {
+                        if (vpn.isExcPayEnabled()) {
+                            rows.add(List.of(keyboardFactory.url("🎮 Копить EXC", egcUrl()), keyboardFactory.callback("🪙 Оплатить EXC", "m:exc")));
+                            reply = "💡 <b>Тогда пусть VPN оплатят игры</b>\nВыполняйте квесты в EGC и копите EXC: "
+                                    + formatExc(Tariff.W1.getExcOnlyPrice()) + " — это неделя VPN без денег.";
+                        } else {
+                            rows.add(List.of(keyboardFactory.callback("💳 Тарифы", "m:tariffs"), keyboardFactory.url("🎮 Копить EXC", egcUrl())));
+                            reply += "\nЗа EXC можно платить на 50 ₽ меньше.";
+                        }
                     }
                     rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
-                    show(uid, oldMsgId, "🙏 <b>Спасибо!</b> Это помогает нам стать лучше."
-                            + ("price".equals(p[2]) ? "\nЗа EXC можно платить на 50 ₽ меньше." : ""), rows);
+                    show(uid, oldMsgId, reply, rows);
                 }
                 case "w" -> {
                     Vpn2Feedback f = ownedFeedback(uid, p.length > 2 ? p[2] : null);
