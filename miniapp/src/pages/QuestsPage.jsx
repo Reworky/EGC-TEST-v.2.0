@@ -731,6 +731,16 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
                 href="/ugc/egc-banner.mp4" download="EGC-banner-horizontal.mp4" target="_blank" rel="noopener noreferrer">
                 🖥 Скачать баннер: горизонтальный
               </a>
+              <p className="quest-desc" style={{ marginTop: 6 }}>
+                Условия обычного баннера: с 6-й секунды на все 10 секунд, целиком, без обрезки и ускорения.
+              </p>
+              <a className="quest-btn" style={{ display: 'block', textAlign: 'center', textDecoration: 'none', marginTop: 8 }}
+                href="/ugc/egc-banner-case.mp4" download="EGC-banner-case.mp4" target="_blank" rel="noopener noreferrer">
+                🎁 Скачать баннер: «Кейс» с сундуком
+              </a>
+              <p className="quest-desc" style={{ marginTop: 6 }}>
+                {'❗️ Свои условия: «Кейс» стоит на экране весь ролик, на видном месте сверху или снизу. Баннер длится 11 секунд: ставь копии подряд до конца ролика.\nЗелёный фон убирается в CapCut: «Оверлей» → «Добавить оверлей» → выдели баннер → «Удалить фон» → «Хромакей».'}
+              </p>
             </>
           )}
           {!(brawlAutoVerify && !externalAutoApprove) && !details[q.id]?.missionQuest && details[q.id]?.requirements && (

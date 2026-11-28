@@ -4647,17 +4647,20 @@ public class QuestSeeder implements CommandLineRunner {
     private static final String UGC_STEP1_NEW = "1️⃣ Скачай любой баннер по кнопке.";
     private static final String UGC_STEP2_OLD = "2️⃣ Вставь его в видео на 6-й секунде, целиком, без обрезки и ускорения.";
     private static final String UGC_STEP2_PREV = "2️⃣ Вставь баннер в видео на 6-й секунде на все 10 секунд: на весь экран или поверх своего ролика, сверху или по центру. Главное, чтобы он был виден целиком, не обрезан и не ускорен.";
-    private static final String UGC_STEP2_NEW = "2️⃣ Вставь его с 6-й секунды, на весь экран или поверх ролика (сверху или по центру), целиком, без обрезки и ускорения.";
+    private static final String UGC_STEP2_PREV2 = "2️⃣ Вставь его с 6-й секунды, на весь экран или поверх ролика (сверху или по центру), целиком, без обрезки и ускорения.";
+    /** 28.11.2026 (владелец): у обычных баннеров и у «Кейса» разные условия. */
+    private static final String UGC_STEP2_NEW = "2️⃣ Вставь по правилам своего баннера:\n📱🖥 Обычный: с 6-й секунды, все 10 секунд.\n🎁 «Кейс»: на весь ролик, сверху или снизу.";
     /** Карточка с баннером обязана укладываться в подпись фото (1000 знаков): шкала наград осталась только в шаге 5, описание и условия сжаты (21.11.2026). */
     private static final String UGC_DESC_OLD = " просмотров: чем больше просмотров, тем выше награда, от 3 000 до 25 000 EXC.";
     private static final String UGC_DESC_NEW = " просмотров.";
     private static final String UGC_REQ_OLD = "Видео публичное, баннер на 6-й секунде (±1 с) виден целиком, реферальная ссылка есть. Без баннера или ссылки квест не засчитывается.";
     private static final String UGC_REQ_PREV = "Видео публичное, баннер виден целиком, реферальная ссылка есть. Без них квест не засчитывается.";
-    private static final String UGC_REQ_NEW = "Видео публичное, баннер виден целиком, есть реферальная ссылка.";
+    private static final String UGC_REQ_PREV2 = "Видео публичное, баннер виден целиком, есть реферальная ссылка.";
+    private static final String UGC_REQ_NEW = "Видео публичное, баннер вставлен по правилам своего вида и виден целиком, есть реферальная ссылка.";
+    private static final String UGC_CHECK_BANNERS = "2️⃣ Проверь баннер по его виду:\n• обычный: начинается примерно на 6-й секунде (±1 с), идёт 10 секунд, виден целиком;\n"
+            + "• «Кейс»: на экране весь ролик, сверху или снизу, хорошо виден, зелёный фон убран.\nНе ускорен и не перекрыт.";
     private static final String UGC_YT_STEP3_OLD = "3️⃣ Опубликуй видео на YouTube обычным видео (публично).";
     private static final String UGC_YT_STEP3_NEW = "3️⃣ Опубликуй видео на YouTube (обычное, не Shorts, публично).";
-    private static final String UGC_CHECK_OLD = "не обрезан, не ускорен, не перекрыт.";
-    private static final String UGC_CHECK_NEW = "не обрезан, не ускорен, не перекрыт. Подойдёт и на весь экран, и поверх ролика (сверху или по центру).";
 
     /** Переносит уже созданные UGC-квесты на новые шаги 1-2 и чек-лист модератора. Идемпотентно: если старой строки нет, ничего не меняет. */
     private void updateUgcBannerSteps(String title) {
@@ -4665,9 +4668,10 @@ public class QuestSeeder implements CommandLineRunner {
             boolean changed = false;
             String instruction = q.getInstruction();
             if (instruction != null && (instruction.contains(UGC_STEP1_OLD) || instruction.contains(UGC_STEP1_PREV) || instruction.contains(UGC_STEP2_OLD)
-                    || instruction.contains(UGC_STEP1_PREV2) || instruction.contains(UGC_STEP2_PREV))) {
+                    || instruction.contains(UGC_STEP1_PREV2) || instruction.contains(UGC_STEP2_PREV) || instruction.contains(UGC_STEP2_PREV2))) {
                 q.setInstruction(instruction.replace(UGC_STEP1_OLD, UGC_STEP1_NEW).replace(UGC_STEP1_PREV, UGC_STEP1_NEW).replace(UGC_STEP2_OLD, UGC_STEP2_NEW)
-                        .replace(UGC_STEP1_PREV2, UGC_STEP1_NEW).replace(UGC_STEP2_PREV, UGC_STEP2_NEW));
+                        .replace(UGC_STEP1_PREV2, UGC_STEP1_NEW).replace(UGC_STEP2_PREV, UGC_STEP2_NEW)
+                        .replace(UGC_STEP2_PREV2, UGC_STEP2_NEW));
                 changed = true;
             }
             String instructionNow = q.getInstruction();
@@ -4681,13 +4685,14 @@ public class QuestSeeder implements CommandLineRunner {
                 changed = true;
             }
             String requirements = q.getRequirements();
-            if (requirements != null && (requirements.contains(UGC_REQ_OLD) || requirements.contains(UGC_REQ_PREV))) {
-                q.setRequirements(requirements.replace(UGC_REQ_OLD, UGC_REQ_NEW).replace(UGC_REQ_PREV, UGC_REQ_NEW));
+            if (requirements != null && (requirements.contains(UGC_REQ_OLD) || requirements.contains(UGC_REQ_PREV) || requirements.contains(UGC_REQ_PREV2))) {
+                q.setRequirements(requirements.replace(UGC_REQ_OLD, UGC_REQ_NEW).replace(UGC_REQ_PREV, UGC_REQ_NEW).replace(UGC_REQ_PREV2, UGC_REQ_NEW));
                 changed = true;
             }
+            // Пункт 2 чек-листа заменяется целиком (прежние варианты начинаются одинаково); после замены строки с таким началом нет, поэтому повторный старт ничего не меняет
             String checklist = q.getModeratorChecklist();
-            if (checklist != null && checklist.contains(UGC_CHECK_OLD) && !checklist.contains(UGC_CHECK_NEW)) {
-                q.setModeratorChecklist(checklist.replace(UGC_CHECK_OLD, UGC_CHECK_NEW));
+            if (checklist != null && checklist.contains("2️⃣ Баннер EGC вставлен")) {
+                q.setModeratorChecklist(checklist.replaceFirst("(?m)^2️⃣ Баннер EGC вставлен.*$", java.util.regex.Matcher.quoteReplacement(UGC_CHECK_BANNERS)));
                 changed = true;
             }
             if (changed) {
