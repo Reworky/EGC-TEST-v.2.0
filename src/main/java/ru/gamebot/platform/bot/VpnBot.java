@@ -51,6 +51,7 @@ import ru.gamebot.platform.domain.repository.Vpn2ManualPaymentRepository;
 import ru.gamebot.platform.event.AnalyticsAlertEvent;
 import ru.gamebot.platform.event.Vpn2TechAlertEvent;
 import ru.gamebot.platform.service.AdminService;
+import ru.gamebot.platform.service.AnalyticsService;
 import ru.gamebot.platform.service.CryptoPayClient;
 import ru.gamebot.platform.service.ExcTransactionService;
 import ru.gamebot.platform.service.TrafficSourceService;
@@ -80,6 +81,7 @@ public class VpnBot extends TelegramLongPollingBot {
 
     private final Vpn2Service vpn;
     private final AdminService adminService;
+    private final AnalyticsService analytics;
     private final ru.gamebot.platform.service.NewbieFunnelService newbieFunnel;
     private final AppProperties appProperties;
     private final UserService userService;
@@ -137,6 +139,26 @@ public class VpnBot extends TelegramLongPollingBot {
                     .build());
         } catch (Exception e) {
             log.warn("VPN bot command menu not set: {}", e.getMessage());
+        }
+        setupAdminCommandMenu();
+    }
+
+    /** Меню «/» админов: плюс /admin и /stats. Админ, ни разу не открывавший бота, получит меню после следующего запуска. */
+    private void setupAdminCommandMenu() {
+        for (Long adminId : adminService.allAdminIds()) {
+            try {
+                execute(org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands.builder()
+                        .commands(List.of(
+                                org.telegram.telegrambots.meta.api.objects.commands.BotCommand.builder().command("start").description("Главное меню").build(),
+                                org.telegram.telegrambots.meta.api.objects.commands.BotCommand.builder().command("admin").description("Админ-панель").build(),
+                                org.telegram.telegrambots.meta.api.objects.commands.BotCommand.builder().command("stats").description("Сводка: пользователи, оплаты, отзывы").build(),
+                                org.telegram.telegrambots.meta.api.objects.commands.BotCommand.builder().command("paysupport").description("Вопросы по оплате и возврат").build(),
+                                org.telegram.telegrambots.meta.api.objects.commands.BotCommand.builder().command("terms").description("Условия сервиса").build()))
+                        .scope(org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScopeChat.builder().chatId(adminId.toString()).build())
+                        .build());
+            } catch (Exception e) {
+                log.info("VPN bot admin command menu not set for {}: {}", adminId, e.getMessage());
+            }
         }
     }
 
@@ -208,13 +230,12 @@ public class VpnBot extends TelegramLongPollingBot {
             handleRefundCommand(uid, text);
             return;
         }
-        if (isStaff(uid) && text.startsWith("/panel")) {
+        if (isStaff(uid) && (text.startsWith("/panel") || text.startsWith("/admin"))) {
             showPanel(uid, null);
             return;
         }
         if (isAdmin(uid) && text.startsWith("/stats")) {
-            sendHtml(uid, vpn.statsHtml() + "\n\n" + vpn.paymentMethodsHtml() + "\nПереводы ждут подтверждения: <b>"
-                    + manualPaymentRepository.countByStatus(Vpn2ManualPayment.STATUS_PENDING) + "</b>\n\n" + feedbackStatsHtml(), null);
+            sendHtml(uid, adminSummaryHtml(), null);
             return;
         }
         if (isAdmin(uid) && text.startsWith("/vpn2")) {
@@ -256,8 +277,9 @@ public class VpnBot extends TelegramLongPollingBot {
         showMain(uid, null);
     }
 
+    /** Админы те же, что в основном боте: из настроек сервера и с ролью ADMIN в EGC. */
     private boolean isAdmin(Long uid) {
-        return adminService.resolvedAdminIds().contains(uid);
+        return adminService.isAdmin(uid);
     }
 
     /** Бот включён и открыт для этого человека: всем (VPN2_OPEN), тестерам (VPN2_TEST_IDS), админам или тем, у кого уже есть ключ. */
@@ -334,7 +356,7 @@ public class VpnBot extends TelegramLongPollingBot {
         rows.add(reviewsUrl == null ? List.of(keyboardFactory.callback("📌 О сервисе", "m:about"))
                 : List.of(keyboardFactory.callback("📌 О сервисе", "m:about"), keyboardFactory.url("📣 Отзывы", reviewsUrl)));
         if (isStaff(uid)) {
-            rows.add(List.of(keyboardFactory.callback("🛠 Панель", "p:menu")));
+            rows.add(List.of(keyboardFactory.callback(isAdmin(uid) ? "🛠 Админ-панель" : "🛠 Панель", "p:menu")));
         }
         rows.add(List.of(keyboardFactory.url("🆘 Поддержка", supportLink(uid, "VPN-бот → главное меню", "общий вопрос по VPN"))));
         rows.add(List.of(keyboardFactory.url("🎮 Играть и копить EXC на скидку", egcUrl())));
@@ -1445,7 +1467,7 @@ public class VpnBot extends TelegramLongPollingBot {
         adminRows.add(List.of(keyboardFactory.callback("✅ Подтвердить оплату", "adm:cok:" + m.getId()), keyboardFactory.callback("❌ Отклонить", "adm:cno:" + m.getId())));
         String note = "🏦 <b>Оплата рублями #" + m.getId() + "</b>\nИгрок <a href=\"tg://user?id=" + uid + "\">" + uid + "</a>, " + escape(t.getTitle()) + ", <b>" + t.getPriceRub()
                 + " ₽</b>. Ему предложено написать менеджеру @" + escape(cardManagerUsername()) + ". Пришлите реквизиты, а когда деньги придут, нажмите «Подтвердить»: ключ уйдёт игроку сам.";
-        for (Long adminId : adminService.resolvedAdminIds()) {
+        for (Long adminId : adminService.allAdminIds()) {
             try {
                 sendHtml(adminId, note, adminRows);
             } catch (Exception e) {
@@ -1554,7 +1576,7 @@ public class VpnBot extends TelegramLongPollingBot {
                 + ", сумма <b>" + m.getAmountRub() + " ₽</b>.\nПроверьте поступление и подтвердите.";
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("✅ Подтвердить", "adm:cok:" + m.getId()), keyboardFactory.callback("❌ Отклонить", "adm:cno:" + m.getId())));
-        for (Long adminId : adminService.resolvedAdminIds()) {
+        for (Long adminId : adminService.allAdminIds()) {
             try {
                 if (isPhoto) {
                     SendPhoto photo = new SendPhoto();
@@ -1781,6 +1803,21 @@ public class VpnBot extends TelegramLongPollingBot {
         if (!isStaff(uid)) {
             return;
         }
+        if (data.startsWith("p:an:") || data.startsWith("p:csv:") || "p:sum".equals(data) || "p:cmds".equals(data)) {
+            if (!isAdmin(uid)) {
+                return; // аналитика и деньги - только админам, техник видит связку, нагрузку и ключи
+            }
+            if (data.startsWith("p:an:")) {
+                showAnalytics(uid, oldMsgId, data.substring(5));
+            } else if (data.startsWith("p:csv:")) {
+                sendAnalyticsCsv(uid, data.substring(6));
+            } else if ("p:sum".equals(data)) {
+                show(uid, oldMsgId, adminSummaryHtml(), panelBackRows("p:sum"));
+            } else {
+                showAdminCommands(uid, oldMsgId);
+            }
+            return;
+        }
         switch (data) {
             case "p:node" -> showPanelNode(uid, oldMsgId);
             case "p:load" -> showPanelLoad(uid, oldMsgId);
@@ -1791,11 +1828,77 @@ public class VpnBot extends TelegramLongPollingBot {
 
     private void showPanel(Long uid, Integer oldMsgId) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (isAdmin(uid)) {
+            rows.add(List.of(keyboardFactory.callback("📊 Аналитика", "p:an:7")));
+            rows.add(List.of(keyboardFactory.callback("🧾 Сводка и отзывы", "p:sum"), keyboardFactory.callback("⌨️ Команды", "p:cmds")));
+        }
         rows.add(List.of(keyboardFactory.callback("📡 Состояние связки", "p:node")));
         rows.add(List.of(keyboardFactory.callback("👥 Нагрузка", "p:load"), keyboardFactory.callback("🔑 Ключи", "p:keys")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
-        show(uid, oldMsgId, "🛠 <b>Панель EGC VPN</b>\n\n" + (isAdmin(uid) ? "Режим администратора: полные ID." : "Режим просмотра: ID замаскированы, оплат нет.")
+        show(uid, oldMsgId, "🛠 <b>" + (isAdmin(uid) ? "Админ-панель" : "Панель") + " EGC VPN</b>\n\n" + (isAdmin(uid) ? "Режим администратора: полные ID." : "Режим просмотра: ID замаскированы, оплат нет.")
                 + "\nТревоги о связке приходят сюда сами.", rows);
+    }
+
+    /** Сводка (то же, что /stats): пользователи, ключи, оплаты по способам, переводы на проверке, отзывы. */
+    private String adminSummaryHtml() {
+        return vpn.statsHtml() + "\n\n" + vpn.paymentMethodsHtml() + "\nПереводы ждут подтверждения: <b>"
+                + manualPaymentRepository.countByStatus(Vpn2ManualPayment.STATUS_PENDING) + "</b>\n\n" + feedbackStatsHtml();
+    }
+
+    private static AnalyticsService.Period analyticsPeriod(String key) {
+        return switch (key) {
+            case "today" -> AnalyticsService.Period.today();
+            case "30" -> AnalyticsService.Period.lastDays(30);
+            default -> AnalyticsService.Period.lastDays(7);
+        };
+    }
+
+    /** Аналитика VPN: тот же расчёт, что вкладка «EGC VPN» в игровом боте, со сравнением с предыдущим периодом. */
+    private void showAnalytics(Long uid, Integer oldMsgId, String periodKey) {
+        String cur = "today".equals(periodKey) || "30".equals(periodKey) ? periodKey : "7";
+        List<String> parts = analytics.formatParts(analytics.compute(AnalyticsService.Tab.VPN, analyticsPeriod(cur)), true);
+        for (int i = 0; i < parts.size() - 1; i++) {
+            sendHtml(uid, parts.get(i), null);
+        }
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(
+                keyboardFactory.callback(("today".equals(cur) ? "✅ " : "") + "Сегодня", "p:an:today"),
+                keyboardFactory.callback(("7".equals(cur) ? "✅ " : "") + "7 дн.", "p:an:7"),
+                keyboardFactory.callback(("30".equals(cur) ? "✅ " : "") + "30 дн.", "p:an:30")));
+        rows.add(List.of(keyboardFactory.callback("📤 Экспорт CSV", "p:csv:" + cur)));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Панель", "p:menu")));
+        show(uid, oldMsgId, parts.get(parts.size() - 1), rows);
+    }
+
+    private void sendAnalyticsCsv(Long uid, String periodKey) {
+        try {
+            String csv = analytics.summaryCsv(analytics.compute(AnalyticsService.Tab.VPN, analyticsPeriod(periodKey)));
+            org.telegram.telegrambots.meta.api.methods.send.SendDocument doc = new org.telegram.telegrambots.meta.api.methods.send.SendDocument();
+            doc.setChatId(uid.toString());
+            doc.setDocument(new org.telegram.telegrambots.meta.api.objects.InputFile(
+                    new java.io.ByteArrayInputStream(csv.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                    "egc_vpn_" + periodKey + "_" + java.time.LocalDate.now() + ".csv"));
+            doc.setCaption("📤 Аналитика EGC VPN");
+            execute(doc);
+        } catch (Exception e) {
+            log.warn("VPN bot: analytics CSV failed", e);
+            sendHtml(uid, "⚠️ Не удалось отправить файл, подробности в логе.", null);
+        }
+    }
+
+    private void showAdminCommands(Long uid, Integer oldMsgId) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("⬅️ Панель", "p:menu")));
+        show(uid, oldMsgId, "⌨️ <b>Команды админа</b>\n\n"
+                + "/admin - эта панель\n"
+                + "/stats - сводка и отзывы\n"
+                + "<code>/vpn2 ID</code> - статус игрока\n"
+                + "<code>/vpn2 ID trial</code> · <code>w1</code> · <code>m1</code> · <code>m3</code> · <code>m12</code> - выдать срок\n"
+                + "<code>/vpn2 ID off</code> - отключить ключ\n"
+                + "<code>/vpn2 sync</code> - перенести ключи в текущую панель\n"
+                + "<code>/vpn2 notify</code> - сообщить о новой ссылке\n"
+                + "<code>/vpn2 warn</code> - предупредить о перебоях\n"
+                + "<code>/vpn2refund ID</code> - возврат Stars", rows);
     }
 
     private List<List<InlineKeyboardButton>> panelBackRows(String refresh) {
@@ -2412,7 +2515,7 @@ public class VpnBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("✅ Опубликовать", "fbadm:pub:" + f.getId()), keyboardFactory.callback("❌ Отклонить", "fbadm:no:" + f.getId())));
         String html = "📝 <b>Отзыв на модерацию</b>\n" + stars(f.getRating()) + "\n«" + escape(f.getReviewText()) + "»\nИгрок <code>" + f.getTelegramId() + "</code>"
                 + (vpn.getReviewsChannel().isBlank() ? "\n\n⚠️ Канал отзывов не задан (VPN2_REVIEWS_CHANNEL), опубликовать пока нельзя." : "");
-        for (Long adminId : adminService.resolvedAdminIds()) {
+        for (Long adminId : adminService.allAdminIds()) {
             sendHtml(adminId, html, rows);
         }
     }
