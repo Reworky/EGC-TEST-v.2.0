@@ -108,6 +108,9 @@ public class VpnBot extends TelegramLongPollingBot {
     /** Кто сейчас платит EXC: защита от двойного нажатия «Оплатить» (двойное списание). */
     private final java.util.Set<Long> excPayInProgress = ConcurrentHashMap.newKeySet();
     private final Object cryptoLock = new Object();
+    private static final String HK_MAIN = "🏠 Главное меню";
+    /** Кому в этом запуске уже поставлена нижняя клавиатура. */
+    private final java.util.Set<Long> homeKeyboardSent = ConcurrentHashMap.newKeySet();
 
     @EventListener(ApplicationReadyEvent.class)
     public void registerBot() {
@@ -242,6 +245,9 @@ public class VpnBot extends TelegramLongPollingBot {
             handleAdminCommand(uid, text);
             return;
         }
+        if (HK_MAIN.equals(text)) {
+            awaitingReviewText.remove(uid); // нажатие нижней кнопки - не текст отзыва, ниже откроется главное меню
+        }
         Long awaitingFeedbackId = awaitingReviewText.remove(uid);
         if (awaitingFeedbackId != null && !text.startsWith("/") && !text.isBlank()) {
             saveReviewText(uid, awaitingFeedbackId, text);
@@ -274,7 +280,30 @@ public class VpnBot extends TelegramLongPollingBot {
             showClosed(uid, null);
             return;
         }
+        ensureHomeKeyboard(uid, text.startsWith("/start"));
         showMain(uid, null);
+    }
+
+    /** Нижняя кнопка «🏠 Главное меню» (игрокам и админам). Telegram ставит клавиатуру только вместе с сообщением, поэтому шлём значок и сразу удаляем: клавиатура остаётся.
+     *  force (/start) - ставим заново; иначе один раз за запуск бота, чтобы кнопка появилась и у тех, кто пользуется только кнопками под сообщениями. */
+    private void ensureHomeKeyboard(Long uid, boolean force) {
+        if (!homeKeyboardSent.add(uid) && !force) {
+            return;
+        }
+        org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow row = new org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow();
+        row.add(new org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardButton(HK_MAIN));
+        SendMessage m = new SendMessage();
+        m.setChatId(uid.toString());
+        m.setText("🏠");
+        m.setReplyMarkup(org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup.builder()
+                .keyboardRow(row).resizeKeyboard(true).build());
+        try {
+            Integer sent = execute(m).getMessageId();
+            execute(new DeleteMessage(uid.toString(), sent));
+        } catch (TelegramApiException e) {
+            homeKeyboardSent.remove(uid); // не получилось - попробуем при следующем действии
+            log.debug("VPN bot: failed to set home keyboard for {}: {}", uid, e.getMessage());
+        }
     }
 
     /** Админы те же, что в основном боте: из настроек сервера и с ролью ADMIN в EGC. */
@@ -303,6 +332,7 @@ public class VpnBot extends TelegramLongPollingBot {
             showClosed(uid, oldMsgId);
             return;
         }
+        ensureHomeKeyboard(uid, false);
         if (!cq.getData().startsWith("fb:")) {
             awaitingReviewText.remove(uid); // ушёл в другой раздел: следующее сообщение не считаем текстом отзыва
         }
